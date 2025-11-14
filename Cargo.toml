@@ -8,7 +8,7 @@ resolver = "2"
 
 [workspace.package]
 version = "0.0.1"
-edition = "2025"
+edition = "2021"
 authors = ["Marcel Maier <marcel99maier@gmail.com>"]
 license = "MIT"
 
