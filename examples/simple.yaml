@@ -1,0 +1,26 @@
+cut_width: 5.0
+
+panel_types:
+  - id: "std_panel"
+    width: 2440.0
+    height: 1220.0
+    cost: 45.00
+
+items:
+  - id: "shelf_a"
+    width: 600.0
+    height: 300.0
+    quantity: 4
+    can_rotate: true
+    
+  - id: "shelf_b"
+    width: 800.0
+    height: 400.0
+    quantity: 2
+    can_rotate: true
+    
+  - id: "back_panel"
+    width: 1200.0
+    height: 600.0
+    quantity: 1
+    can_rotate: false

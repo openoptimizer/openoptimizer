@@ -1,0 +1,293 @@
+openapi: 3.1.0
+info:
+  title: OpenOptimizer API
+  version: 1.0.0
+  description: |
+    REST interface for the OpenOptimizer cutting layout engine.
+    The optimizer accepts a batch of rectangular parts, available panel types,
+    and optional packing preferences, and replies with detailed cutting layouts.
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      description: Returns current service status and version information.
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: cutting-optimizer-api
+                  version:
+                    type: string
+                    example: 1.0.0
+  /api/optimize:
+    post:
+      summary: Optimize cutting plan
+      description: Runs the best-fit decreasing optimizer for the provided request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OptimizationRequest'
+      responses:
+        '200':
+          description: Successful optimization result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptimizationResult'
+        '400':
+          description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/generate/svg:
+    post:
+      summary: Generate SVG preview
+      description: Accepts an optimization result and produces a combined SVG visualization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OptimizationResult'
+      responses:
+        '200':
+          description: SVG markup representing the layouts
+          content:
+            image/svg+xml:
+              schema:
+                type: string
+                description: Raw SVG markup
+        '400':
+          description: Invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Unexpected server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    OptimizationRequest:
+      type: object
+      required:
+        - cut_width
+        - panel_types
+        - items
+      properties:
+        cut_width:
+          type: number
+          format: double
+          minimum: 0
+          description: Kerf (cut) width that should be left between placements.
+        panel_types:
+          type: array
+          description: Available panel dimensions that can be consumed.
+          items:
+            $ref: '#/components/schemas/PanelType'
+        items:
+          type: array
+          description: Items to cut from the provided panels.
+          items:
+            $ref: '#/components/schemas/Item'
+        min_initial_usage:
+          type: boolean
+          description: Prioritize filling panels completely before opening new ones.
+          default: false
+        min_reusable_remnant_size:
+          type: number
+          format: double
+          nullable: true
+          description: Minimum remnant area considered reusable (excluded from waste).
+        optimize_for_reusable_remnants:
+          type: boolean
+          description: Prefer placements that leave large reusable remnants.
+          default: false
+    PanelType:
+      type: object
+      required:
+        - id
+        - width
+        - height
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the panel type.
+        width:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+        optional_items:
+          type: array
+          description: Optional filler items that can be added if they reduce waste.
+          items:
+            $ref: '#/components/schemas/Item'
+          default: []
+    Item:
+      type: object
+      required:
+        - id
+        - width
+        - height
+        - quantity
+        - can_rotate
+      properties:
+        id:
+          type: string
+        width:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+        quantity:
+          type: integer
+          minimum: 1
+        can_rotate:
+          type: boolean
+          description: Whether the item may be rotated by 90 degrees.
+    OptimizationResult:
+      type: object
+      required:
+        - panels_required
+        - layouts
+        - summary
+        - optional_items_used
+      properties:
+        panels_required:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+          description: Map of panel type id to number of panels consumed.
+        layouts:
+          type: array
+          items:
+            $ref: '#/components/schemas/PanelLayout'
+        summary:
+          $ref: '#/components/schemas/Summary'
+        optional_items_used:
+          type: array
+          items:
+            type: string
+          description: List of optional item identifiers that were placed.
+    PanelLayout:
+      type: object
+      required:
+        - panel_type_id
+        - panel_number
+        - width
+        - height
+        - placements
+      properties:
+        panel_type_id:
+          type: string
+        panel_number:
+          type: integer
+          minimum: 1
+        width:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+        placements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Placement'
+    Placement:
+      type: object
+      required:
+        - item_id
+        - x
+        - y
+        - width
+        - height
+        - rotated
+      properties:
+        item_id:
+          type: string
+        x:
+          type: number
+          format: double
+        y:
+          type: number
+          format: double
+        width:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+        rotated:
+          type: boolean
+    Summary:
+      type: object
+      required:
+        - total_panels
+        - total_area
+        - used_area
+        - waste_area
+        - waste_percentage
+      properties:
+        total_panels:
+          type: integer
+          minimum: 0
+        total_area:
+          type: number
+          format: double
+        used_area:
+          type: number
+          format: double
+        waste_area:
+          type: number
+          format: double
+        waste_percentage:
+          type: number
+          format: double
+        reusable_remnant_area:
+          type: number
+          format: double
+          nullable: true
+        actual_waste_area:
+          type: number
+          format: double
+          nullable: true
+        actual_waste_percentage:
+          type: number
+          format: double
+          nullable: true
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human readable error message.

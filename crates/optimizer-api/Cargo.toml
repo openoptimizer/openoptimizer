@@ -1,0 +1,26 @@
+[package]
+name = "optimizer-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "optimizer-api"
+path = "src/main.rs"
+
+[dependencies]
+optimizer-core = { path = "../optimizer-core" }
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+
+# Web framework
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["fs", "cors"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

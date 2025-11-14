@@ -1,0 +1,60 @@
+{
+  "cut_width": 4.0,
+  "panel_types": [
+    {
+      "id": "mdf_8x4",
+      "width": 2440.0,
+      "height": 1220.0,
+      "cost": 38.50
+    },
+    {
+      "id": "mdf_6x3",
+      "width": 1830.0,
+      "height": 915.0,
+      "cost": 28.00
+    },
+    {
+      "id": "mdf_4x2",
+      "width": 1220.0,
+      "height": 610.0,
+      "cost": 15.00
+    }
+  ],
+  "items": [
+    {
+      "id": "cabinet_side",
+      "width": 800.0,
+      "height": 600.0,
+      "quantity": 8,
+      "can_rotate": true
+    },
+    {
+      "id": "cabinet_shelf",
+      "width": 780.0,
+      "height": 400.0,
+      "quantity": 12,
+      "can_rotate": true
+    },
+    {
+      "id": "cabinet_door",
+      "width": 400.0,
+      "height": 800.0,
+      "quantity": 4,
+      "can_rotate": false
+    },
+    {
+      "id": "drawer_side",
+      "width": 500.0,
+      "height": 150.0,
+      "quantity": 8,
+      "can_rotate": true
+    },
+    {
+      "id": "drawer_bottom",
+      "width": 480.0,
+      "height": 480.0,
+      "quantity": 4,
+      "can_rotate": true
+    }
+  ]
+}

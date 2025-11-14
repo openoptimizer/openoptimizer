@@ -1,0 +1,57 @@
+cut_width: 3.0
+
+panel_types:
+  - id: "plywood_8x4"
+    width: 2440.0
+    height: 1220.0
+    cost: 55.00
+    
+  - id: "plywood_6x4"
+    width: 1830.0
+    height: 1220.0
+    cost: 42.00
+
+items:
+  # Bookshelf components
+  - id: "shelf_long"
+    width: 900.0
+    height: 300.0
+    quantity: 6
+    can_rotate: true
+    
+  - id: "shelf_short"
+    width: 600.0
+    height: 300.0
+    quantity: 4
+    can_rotate: true
+    
+  - id: "side_panel"
+    width: 1800.0
+    height: 400.0
+    quantity: 4
+    can_rotate: false
+    
+  - id: "back_panel"
+    width: 900.0
+    height: 1750.0
+    quantity: 2
+    can_rotate: false
+    
+  # Desk components
+  - id: "desktop"
+    width: 1400.0
+    height: 700.0
+    quantity: 1
+    can_rotate: true
+    
+  - id: "desk_leg"
+    width: 700.0
+    height: 70.0
+    quantity: 4
+    can_rotate: false
+    
+  - id: "drawer_front"
+    width: 450.0
+    height: 200.0
+    quantity: 3
+    can_rotate: true

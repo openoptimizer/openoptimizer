@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cutting Stock Optimizer - Interactive Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+        
+        .sidebar {
+            background: #f9f9f9;
+            padding: 25px;
+            border-radius: 8px;
+            height: fit-content;
+        }
+        
+        .results-area {
+            min-height: 500px;
+        }
+        
+        .section {
+            margin-bottom: 30px;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .section h3 {
+            color: #555;
+            margin-bottom: 12px;
+            font-size: 1.1em;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        input[type="number"],
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+        
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f5f5f5;
+            color: #333;
+            margin-top: 8px;
+        }
+        
+        .btn-secondary:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+        
+        .btn-danger {
+            background: #ff4757;
+            color: white;
+            padding: 6px 12px;
+            font-size: 12px;
+            width: auto;
+        }
+        
+        .btn-success {
+            background: #2ed573;
+            color: white;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .item-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 10px;
+            background: white;
+        }
+        
+        .item-card {
+            background: #f9f9f9;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .item-card:last-child {
+            margin-bottom: 0;
+        }
+        
+        .item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        
+        .item-header strong {
+            color: #667eea;
+        }
+        
+        .item-details {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .panel-card {
+            background: white;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            border: 2px solid #e0e0e0;
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+        
+        .empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        #results {
+            display: none;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-card .label {
+            font-size: 12px;
+            opacity: 0.9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+        
+        .stat-card .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        
+        #svg-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            overflow-x: auto;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 60px;
+            color: #666;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        
+        .alert-error {
+            background: #fee;
+            border: 2px solid #fcc;
+            color: #c00;
+        }
+        
+        .alert-success {
+            background: #efe;
+            border: 2px solid #cfc;
+            color: #060;
+        }
+        
+        .alert-info {
+            background: #e3f2fd;
+            border: 2px solid #90caf9;
+            color: #1565c0;
+        }
+        
+        small {
+            color: #666;
+            font-size: 12px;
+        }
+        
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        @media (max-width: 1000px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔧 Cutting Stock Optimizer</h1>
+            <p>Interactive tool for optimizing panel cutting layouts</p>
+        </header>
+        
+        <div class="main-content">
+            <!-- Sidebar: Configuration -->
+            <div class="sidebar">
+                <div class="section">
+                    <h2>⚙️ Configuration</h2>
+                    
+                    <div class="form-group">
+                        <label for="cut-width">Cut Width (Kerf)</label>
+                        <input type="number" id="cut-width" value="2" min="0" step="0.1">
+                        <small>Width of saw blade cut</small>
+                    </div>
+                    
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="min-initial-usage">
+                        <label for="min-initial-usage" style="margin-bottom: 0;">Minimize initial panel usage (cluster items)</label>
+                    </div>
+                    <small>Prefer filling the current panel before starting a new one</small>
+
+                    <div class="checkbox-group" style="margin-top: 12px;">
+                        <input type="checkbox" id="optimize-reusable-remnants">
+                        <label for="optimize-reusable-remnants" style="margin-bottom: 0;">Optimize for reusable remnants</label>
+                    </div>
+                    <small>Group cuts to leave large reusable offcuts</small>
+
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label for="min-reusable-remnant-size">Minimum reusable remnant area (sq units)</label>
+                        <input type="number" id="min-reusable-remnant-size" placeholder="e.g. 10000" min="0" step="1">
+                        <small>Leave blank if you don't want to track reusable remnants</small>
+                    </div>
+                </div>
+                
+                <div class="section">
+                    <h2>📐 Panel Types</h2>
+                    <div id="panel-list" class="item-list" style="max-height: 200px;">
+                        <div class="panel-card">
+                            <div class="panel-header">
+                                <strong>standard_plywood_4x8</strong>
+                                <button class="btn-danger" onclick="removePanel(0)">Remove</button>
+                            </div>
+                            <div class="item-details">
+                                2400 × 1200 mm
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 20px;">Add Panel Type</h3>
+                    <div class="form-group">
+                        <input type="text" id="panel-id" placeholder="Panel ID (e.g., plywood_4x8)">
+                    </div>
+                    <div class="input-row">
+                        <div class="form-group">
+                            <input type="number" id="panel-width" placeholder="Width" value="2400">
+                        </div>
+                        <div class="form-group">
+                            <input type="number" id="panel-height" placeholder="Height" value="1200">
+                        </div>
+                    </div>
+                    <button class="btn-success" onclick="addPanel()">+ Add Panel</button>
+                </div>
+                
+                <div class="section">
+                    <h2>📦 Items to Cut</h2>
+                    <div id="items-list" class="item-list">
+                        <div class="empty-state">
+                            <div class="icon">📦</div>
+                            <p>No items added yet</p>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 20px;">Add Item</h3>
+                    <div class="form-group">
+                        <input type="text" id="item-id" placeholder="Item ID (e.g., shelf_600x300)">
+                    </div>
+                    <div class="input-row">
+                        <div class="form-group">
+                            <input type="number" id="item-width" placeholder="Width" value="600">
+                        </div>
+                        <div class="form-group">
+                            <input type="number" id="item-height" placeholder="Height" value="300">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <input type="number" id="item-quantity" placeholder="Quantity" value="1" min="1">
+                    </div>
+                    <div class="checkbox-group" style="margin-bottom: 15px;">
+                        <input type="checkbox" id="item-can-rotate" checked>
+                        <label for="item-can-rotate" style="margin-bottom: 0;">Can Rotate 90°</label>
+                    </div>
+                    <button class="btn-success" onclick="addItem()">+ Add Item</button>
+                </div>
+                
+                <div class="section">
+                    <button class="btn-primary" id="optimize-btn" onclick="runOptimization()">
+                        🚀 Optimize Layout
+                    </button>
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label for="example-select">Example Requests</label>
+                        <select id="example-select" onchange="updateExampleDescription()"></select>
+                        <small id="example-description">Choose an example to preload the form</small>
+                    </div>
+                    <button class="btn-secondary" onclick="loadSelectedExample()">
+                        Load Selected Example
+                    </button>
+                    <button class="btn-secondary" onclick="clearAll()">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Results Area -->
+            <div class="results-area">
+                <div id="loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Running optimization algorithm...</p>
+                    <small>This may take a moment for large problems</small>
+                </div>
+                
+                <div id="results">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">📊 Optimization Results</h2>
+                    
+                    <div class="stats">
+                        <div class="stat-card">
+                            <div class="label">Total Panels</div>
+                            <div class="value" id="total-panels">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">Waste</div>
+                            <div class="value" id="waste">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">Used Area</div>
+                            <div class="value" id="used-area">-</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="label">Total Area</div>
+                            <div class="value" id="total-area">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="section">
+                        <h3>Panel Requirements</h3>
+                        <div id="panels-required"></div>
+                    </div>
+                    
+                    <div class="section">
+                        <h3>Cutting Layout Visualization</h3>
+                        <div id="svg-container"></div>
+                    </div>
+                    
+                    <button class="btn-secondary" onclick="downloadResults()" style="margin-top: 20px;">
+                        💾 Download Results (JSON)
+                    </button>
+                </div>
+                
+                <div id="welcome" class="empty-state" style="padding-top: 100px;">
+                    <div class="icon">👈</div>
+                    <h2 style="color: #667eea; margin-bottom: 15px;">Welcome to Cutting Stock Optimizer!</h2>
+                    <p style="max-width: 500px; margin: 0 auto; line-height: 1.6;">
+                        Add panel types and items using the sidebar, then click <strong>"Optimize Layout"</strong> 
+                        to calculate the most efficient cutting pattern. You can also load an example to get started quickly.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '/api';
+
+        const EXAMPLES = {
+            simple: {
+                label: 'Simple Shelves (YAML)',
+                description: 'Single panel type with three shelf/back parts from examples/simple.yaml.',
+                cutWidth: 5,
+                minInitialUsage: false,
+                optimizeReusableRemnants: false,
+                minReusableRemnantSize: null,
+                panels: [
+                    { id: 'std_panel', width: 2440, height: 1220 }
+                ],
+                items: [
+                    { id: 'shelf_a', width: 600, height: 300, quantity: 4, can_rotate: true },
+                    { id: 'shelf_b', width: 800, height: 400, quantity: 2, can_rotate: true },
+                    { id: 'back_panel', width: 1200, height: 600, quantity: 1, can_rotate: false }
+                ]
+            },
+            complex: {
+                label: 'Cabinet Build (JSON)',
+                description: 'Multi-panel cabinet job from examples/complex.json.',
+                cutWidth: 4,
+                minInitialUsage: false,
+                optimizeReusableRemnants: false,
+                minReusableRemnantSize: null,
+                panels: [
+                    { id: 'mdf_8x4', width: 2440, height: 1220 },
+                    { id: 'mdf_6x3', width: 1830, height: 915 },
+                    { id: 'mdf_4x2', width: 1220, height: 610 }
+                ],
+                items: [
+                    { id: 'cabinet_side', width: 800, height: 600, quantity: 8, can_rotate: true },
+                    { id: 'cabinet_shelf', width: 780, height: 400, quantity: 12, can_rotate: true },
+                    { id: 'cabinet_door', width: 400, height: 800, quantity: 4, can_rotate: false },
+                    { id: 'drawer_side', width: 500, height: 150, quantity: 8, can_rotate: true },
+                    { id: 'drawer_bottom', width: 480, height: 480, quantity: 4, can_rotate: true }
+                ]
+            },
+            furniture: {
+                label: 'Furniture Bundle (YAML)',
+                description: 'Bookshelf + desk workload from examples/furniture.yaml.',
+                cutWidth: 3,
+                minInitialUsage: true,
+                optimizeReusableRemnants: false,
+                minReusableRemnantSize: null,
+                panels: [
+                    { id: 'plywood_8x4', width: 2440, height: 1220 },
+                    { id: 'plywood_6x4', width: 1830, height: 1220 }
+                ],
+                items: [
+                    { id: 'shelf_long', width: 900, height: 300, quantity: 6, can_rotate: true },
+                    { id: 'shelf_short', width: 600, height: 300, quantity: 4, can_rotate: true },
+                    { id: 'side_panel', width: 1800, height: 400, quantity: 4, can_rotate: false },
+                    { id: 'back_panel', width: 900, height: 1750, quantity: 2, can_rotate: false },
+                    { id: 'desktop', width: 1400, height: 700, quantity: 1, can_rotate: true },
+                    { id: 'desk_leg', width: 700, height: 70, quantity: 4, can_rotate: false },
+                    { id: 'drawer_front', width: 450, height: 200, quantity: 3, can_rotate: true }
+                ]
+            }
+        };
+        
+        let panels = [
+            { id: 'standard_plywood_4x8', width: 2400, height: 1200 }
+        ];
+        let items = [];
+        let currentResult = null;
+        
+        function addPanel() {
+            const id = document.getElementById('panel-id').value;
+            const width = parseFloat(document.getElementById('panel-width').value);
+            const height = parseFloat(document.getElementById('panel-height').value);
+            
+            if (!id || !width || !height) {
+                showAlert('Please fill in all required panel fields', 'error');
+                return;
+            }
+            
+            panels.push({ id, width, height });
+            renderPanels();
+            
+            // Clear form
+            document.getElementById('panel-id').value = '';
+        }
+        
+        function removePanel(index) {
+            panels.splice(index, 1);
+            renderPanels();
+        }
+        
+        function renderPanels() {
+            const list = document.getElementById('panel-list');
+            if (panels.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="icon">📐</div><p>No panels defined</p></div>';
+                return;
+            }
+            
+            list.innerHTML = panels.map((p, i) => `
+                <div class="panel-card">
+                    <div class="panel-header">
+                        <strong>${p.id}</strong>
+                        <button class="btn-danger" onclick="removePanel(${i})">Remove</button>
+                    </div>
+                    <div class="item-details">
+                        ${p.width} × ${p.height} mm
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        function addItem() {
+            const id = document.getElementById('item-id').value;
+            const width = parseFloat(document.getElementById('item-width').value);
+            const height = parseFloat(document.getElementById('item-height').value);
+            const quantity = parseInt(document.getElementById('item-quantity').value);
+            const canRotate = document.getElementById('item-can-rotate').checked;
+            
+            if (!id || !width || !height || !quantity) {
+                showAlert('Please fill in all required item fields', 'error');
+                return;
+            }
+            
+            items.push({ id, width, height, quantity, can_rotate: canRotate });
+            renderItems();
+            
+            // Clear form
+            document.getElementById('item-id').value = '';
+            document.getElementById('item-quantity').value = '1';
+        }
+        
+        function removeItem(index) {
+            items.splice(index, 1);
+            renderItems();
+        }
+        
+        function renderItems() {
+            const list = document.getElementById('items-list');
+            if (items.length === 0) {
+                list.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>No items added yet</p></div>';
+                return;
+            }
+            
+            list.innerHTML = items.map((item, i) => `
+                <div class="item-card">
+                    <div class="item-header">
+                        <strong>${item.id}</strong>
+                        <button class="btn-danger" onclick="removeItem(${i})">Remove</button>
+                    </div>
+                    <div class="item-details">
+                        ${item.width} × ${item.height} mm<br>
+                        Quantity: ${item.quantity} • ${item.can_rotate ? '🔄 Rotatable' : '🔒 Fixed'}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        async function runOptimization() {
+            if (panels.length === 0) {
+                showAlert('Please add at least one panel type', 'error');
+                return;
+            }
+            
+            if (items.length === 0) {
+                showAlert('Please add at least one item', 'error');
+                return;
+            }
+            
+            const minRemnantInput = document.getElementById('min-reusable-remnant-size').value.trim();
+            const minReusableRemnantSize = minRemnantInput === '' ? null : parseFloat(minRemnantInput);
+            if (minReusableRemnantSize !== null && (isNaN(minReusableRemnantSize) || minReusableRemnantSize < 0)) {
+                showAlert('Minimum reusable remnant area must be a positive number', 'error');
+                return;
+            }
+
+            const request = {
+                cut_width: parseFloat(document.getElementById('cut-width').value),
+                min_initial_usage: document.getElementById('min-initial-usage').checked,
+                optimize_for_reusable_remnants: document.getElementById('optimize-reusable-remnants').checked,
+                panel_types: panels,
+                items: items,
+                min_reusable_remnant_size: minReusableRemnantSize
+            };
+            
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('welcome').style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/optimize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(request)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Optimization failed');
+                }
+                
+                const result = await response.json();
+                currentResult = result;
+                displayResults(result);
+                
+            } catch (error) {
+                showAlert('Optimization failed: ' + error.message, 'error');
+                document.getElementById('welcome').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        async function displayResults(result) {
+            document.getElementById('total-panels').textContent = result.summary.total_panels;
+            document.getElementById('waste').textContent = result.summary.waste_percentage.toFixed(1) + '%';
+            document.getElementById('used-area').textContent = (result.summary.used_area / 1000000).toFixed(2) + ' m²';
+            document.getElementById('total-area').textContent = (result.summary.total_area / 1000000).toFixed(2) + ' m²';
+            
+            // Panels required
+            const panelsReq = document.getElementById('panels-required');
+            panelsReq.innerHTML = Object.entries(result.panels_required).map(([id, count]) => `
+                <div class="panel-card">
+                    <strong>${id}</strong>: ${count} panel${count > 1 ? 's' : ''}
+                </div>
+            `).join('');
+            
+            // Generate SVG
+            try {
+                const svgResponse = await fetch(`${API_BASE}/generate/svg`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(result)
+                });
+                
+                if (svgResponse.ok) {
+                    const svgText = await svgResponse.text();
+                    document.getElementById('svg-container').innerHTML = svgText;
+                }
+            } catch (error) {
+                console.error('Failed to generate SVG:', error);
+            }
+            
+            document.getElementById('results').style.display = 'block';
+            showAlert('Optimization completed successfully!', 'success');
+        }
+        
+        function populateExampleSelect() {
+            const select = document.getElementById('example-select');
+            select.innerHTML = Object.entries(EXAMPLES)
+                .map(([key, example]) => `<option value="${key}">${example.label}</option>`)
+                .join('');
+            select.value = Object.keys(EXAMPLES)[0];
+        }
+
+        function updateExampleDescription() {
+            const select = document.getElementById('example-select');
+            const example = EXAMPLES[select.value];
+            const descEl = document.getElementById('example-description');
+            if (example && descEl) {
+                descEl.textContent = example.description;
+            }
+        }
+
+        function loadSelectedExample() {
+            const select = document.getElementById('example-select');
+            loadExample(select.value);
+        }
+
+        function loadExample(key) {
+            const example = EXAMPLES[key];
+            if (!example) {
+                showAlert('Unknown example selected.', 'error');
+                return;
+            }
+
+            panels = example.panels.map(panel => ({ ...panel }));
+            items = example.items.map(item => ({ ...item }));
+
+            document.getElementById('cut-width').value = example.cutWidth;
+            document.getElementById('min-initial-usage').checked = example.minInitialUsage;
+            document.getElementById('optimize-reusable-remnants').checked = example.optimizeReusableRemnants;
+            const remnantInput = document.getElementById('min-reusable-remnant-size');
+            remnantInput.value = example.minReusableRemnantSize ?? '';
+            
+            renderPanels();
+            renderItems();
+            showAlert(`${example.label} loaded! Click "Optimize Layout" to see results.`, 'info');
+        }
+        
+        function clearAll() {
+            if (confirm('Clear all panels and items?')) {
+                panels = [];
+                items = [];
+                renderPanels();
+                renderItems();
+                document.getElementById('min-initial-usage').checked = false;
+                document.getElementById('optimize-reusable-remnants').checked = false;
+                document.getElementById('min-reusable-remnant-size').value = '';
+                document.getElementById('results').style.display = 'none';
+                document.getElementById('welcome').style.display = 'block';
+            }
+        }
+        
+        function downloadResults() {
+            if (!currentResult) return;
+            
+            const blob = new Blob([JSON.stringify(currentResult, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'optimization-result.json';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            
+            const sidebar = document.querySelector('.sidebar');
+            sidebar.insertBefore(alertDiv, sidebar.firstChild);
+            
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+        
+        // Initialize
+        populateExampleSelect();
+        updateExampleDescription();
+        renderPanels();
+        renderItems();
+    </script>
+</body>
+</html>

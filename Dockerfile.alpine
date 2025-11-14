@@ -1,0 +1,64 @@
+# Multi-stage build using Alpine for smaller images
+# Alpine images are typically 5-10x smaller than Debian
+
+# Stage 1: Builder
+FROM rust:latest-alpine as builder
+
+# Install build dependencies
+RUN apk add --no-cache \
+    musl-dev \
+    pkgconfig \
+    openssl-dev \
+    openssl-libs-static
+
+# Create app directory
+WORKDIR /app
+
+# Copy workspace files
+COPY Cargo.toml ./
+COPY crates ./crates
+
+# Build statically linked binaries
+ENV RUSTFLAGS="-C target-feature=+crt-static"
+RUN cargo build --release --target x86_64-unknown-linux-musl
+
+# Stage 2: Runtime image for API (Alpine)
+FROM alpine:3.19 as api
+
+# Install minimal runtime dependencies
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+
+# Copy the API binary
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/optimizer-api /app/optimizer-api
+
+# Copy web UI
+COPY web ./web
+
+# Copy examples
+COPY examples ./examples
+
+# Expose API port
+EXPOSE 3000
+
+# Run the API server
+CMD ["/app/optimizer-api"]
+
+# Stage 3: Runtime image for CLI (Alpine)
+FROM alpine:3.19 as cli
+
+# Install minimal runtime dependencies
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+
+# Copy the CLI binary
+COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/optimizer /app/optimizer
+
+# Copy examples
+COPY examples ./examples
+
+# Default command shows help
+ENTRYPOINT ["/app/optimizer"]
+CMD ["--help"]
