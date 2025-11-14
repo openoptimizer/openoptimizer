@@ -58,8 +58,8 @@ curl -s -X POST http://localhost:3000/api/optimize ^
 ### Run inside Docker
 
 ```cmd
-docker build --target api -t openoptimizer-api:latest .
-docker run -d -p 3000:3000 openoptimizer-api:latest
+docker build --target api -t openoptimizer/openoptimizer-api:latest .
+docker run -d -p 3000:3000 openoptimizer/openoptimizer-api:latest
 ```
 
 ## Example Payloads
