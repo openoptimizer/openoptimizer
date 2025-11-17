@@ -4,11 +4,13 @@ panel_types:
   - id: "plywood_8x4"
     width: 2440.0
     height: 1220.0
+    trimming: 5.0
     cost: 55.00
     
   - id: "plywood_6x4"
     width: 1830.0
     height: 1220.0
+    trimming: 0.0
     cost: 42.00
 
 items:

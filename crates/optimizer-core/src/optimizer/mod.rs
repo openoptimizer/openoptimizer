@@ -27,6 +27,25 @@ impl Optimizer {
             ));
         }
 
+        for panel in &request.panel_types {
+            if panel.trimming < 0.0 {
+                return Err(OptimizerError::InvalidInput(format!(
+                    "Panel '{}' has negative trimming",
+                    panel.id
+                )));
+            }
+
+            let usable_width = panel.width - (panel.trimming * 2.0);
+            let usable_height = panel.height - (panel.trimming * 2.0);
+
+            if usable_width <= 0.0 || usable_height <= 0.0 {
+                return Err(OptimizerError::InvalidInput(format!(
+                    "Panel '{}' becomes unusable after applying trimming",
+                    panel.id
+                )));
+            }
+        }
+
         Ok(Self { request })
     }
 
@@ -122,6 +141,7 @@ impl Optimizer {
                     panel_number,
                     width: panel_type.width,
                     height: panel_type.height,
+                    trimming: panel_type.trimming,
                     placements: vec![placement],
                 });
             }
@@ -237,13 +257,16 @@ impl Optimizer {
     /// Opens a new panel when the item cannot be placed on existing layouts.
     fn place_on_new_panel(&self, item: &Item) -> Result<Option<(PanelType, Placement)>> {
         for panel_type in &self.request.panel_types {
-            if item.width <= panel_type.width && item.height <= panel_type.height {
+            let usable_width = panel_type.width - (panel_type.trimming * 2.0);
+            let usable_height = panel_type.height - (panel_type.trimming * 2.0);
+
+            if item.width <= usable_width && item.height <= usable_height {
                 return Ok(Some((
                     panel_type.clone(),
                     Placement {
                         item_id: item.id.clone(),
-                        x: 0.0,
-                        y: 0.0,
+                        x: panel_type.trimming,
+                        y: panel_type.trimming,
                         width: item.width,
                         height: item.height,
                         rotated: false,
@@ -251,14 +274,13 @@ impl Optimizer {
                 )));
             }
 
-            if item.can_rotate && item.height <= panel_type.width && item.width <= panel_type.height
-            {
+            if item.can_rotate && item.height <= usable_width && item.width <= usable_height {
                 return Ok(Some((
                     panel_type.clone(),
                     Placement {
                         item_id: item.id.clone(),
-                        x: 0.0,
-                        y: 0.0,
+                        x: panel_type.trimming,
+                        y: panel_type.trimming,
                         width: item.height,
                         height: item.width,
                         rotated: true,

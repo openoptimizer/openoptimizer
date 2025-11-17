@@ -8,6 +8,7 @@ fn test_simple_optimization() {
             id: "panel_a".to_string(),
             width: 100.0,
             height: 100.0,
+            trimming: 0.0,
             optional_items: vec![],
         }],
         items: vec![
@@ -48,6 +49,7 @@ fn test_reusable_remnant_size() {
             id: "panel_a".to_string(),
             width: 1000.0,
             height: 1000.0,
+            trimming: 0.0,
             optional_items: vec![],
         }],
         items: vec![Item {
@@ -85,6 +87,7 @@ fn test_optimize_for_reusable_remnants() {
             id: "panel_a".to_string(),
             width: 1000.0,
             height: 1000.0,
+            trimming: 0.0,
             optional_items: vec![],
         }],
         items: vec![Item {
@@ -113,6 +116,7 @@ fn test_min_initial_usage_packs_single_panel() {
             id: "panel_a".to_string(),
             width: 2400.0,
             height: 1200.0,
+            trimming: 0.0,
             optional_items: vec![],
         }],
         items: vec![Item {
@@ -143,6 +147,7 @@ fn test_unused_area_allows_additional_row() {
             id: "plywood".into(),
             width: 2400.0,
             height: 1200.0,
+            trimming: 0.0,
             optional_items: vec![],
         }],
         items: vec![Item {
@@ -164,6 +169,7 @@ fn test_unused_area_allows_additional_row() {
         panel_number: 1,
         width: 2400.0,
         height: 1200.0,
+        trimming: 0.0,
         placements: vec![
             Placement {
                 item_id: "shelf1".into(),
@@ -228,6 +234,7 @@ fn test_try_place_item_after_vertical_piece() {
             id: "plywood".into(),
             width: 2400.0,
             height: 1200.0,
+            trimming: 0.0,
             optional_items: vec![],
         }],
         items: vec![Item {
@@ -249,6 +256,7 @@ fn test_try_place_item_after_vertical_piece() {
         panel_number: 1,
         width: 2400.0,
         height: 1200.0,
+        trimming: 0.0,
         placements: vec![
             Placement {
                 item_id: "shelf1".into(),
@@ -319,4 +327,64 @@ fn test_try_place_item_after_vertical_piece() {
 
     let placement = optimizer.try_place_item(&next_item, &layout);
     assert!(placement.is_some());
+}
+
+#[test]
+fn test_trimming_offsets_placements() {
+    let request = OptimizationRequest {
+        cut_width: 1.0,
+        panel_types: vec![PanelType {
+            id: "trimmed".into(),
+            width: 500.0,
+            height: 400.0,
+            trimming: 10.0,
+            optional_items: vec![],
+        }],
+        items: vec![Item {
+            id: "panel".into(),
+            width: 200.0,
+            height: 100.0,
+            quantity: 1,
+            can_rotate: false,
+        }],
+        min_initial_usage: false,
+        min_reusable_remnant_size: None,
+        optimize_for_reusable_remnants: false,
+    };
+
+    let optimizer = Optimizer::new(request).unwrap();
+    let result = optimizer.optimize().unwrap();
+
+    let layout = &result.layouts[0];
+    assert!((layout.trimming - 10.0).abs() < f64::EPSILON);
+    let placement = &layout.placements[0];
+    assert!((placement.x - 10.0).abs() < f64::EPSILON);
+    assert!((placement.y - 10.0).abs() < f64::EPSILON);
+}
+
+#[test]
+fn test_invalid_trimming_rejected() {
+    let request = OptimizationRequest {
+        cut_width: 1.0,
+        panel_types: vec![PanelType {
+            id: "tiny".into(),
+            width: 20.0,
+            height: 20.0,
+            trimming: 15.0,
+            optional_items: vec![],
+        }],
+        items: vec![Item {
+            id: "piece".into(),
+            width: 5.0,
+            height: 5.0,
+            quantity: 1,
+            can_rotate: false,
+        }],
+        min_initial_usage: false,
+        min_reusable_remnant_size: None,
+        optimize_for_reusable_remnants: false,
+    };
+
+    let result = Optimizer::new(request);
+    assert!(matches!(result, Err(OptimizerError::InvalidInput(_))));
 }

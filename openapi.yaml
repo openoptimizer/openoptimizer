@@ -149,6 +149,11 @@ components:
           items:
             $ref: '#/components/schemas/Item'
           default: []
+        trimming:
+          type: number
+          format: double
+          description: Uniform border (in panel units) trimmed from every edge before placing items.
+          default: 0
     Item:
       type: object
       required:
@@ -217,6 +222,11 @@ components:
         height:
           type: number
           format: double
+        trimming:
+          type: number
+          format: double
+          description: Uniform border removed from this panel type during optimization.
+          default: 0
         placements:
           type: array
           items:

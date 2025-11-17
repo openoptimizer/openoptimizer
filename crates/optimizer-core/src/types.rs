@@ -7,6 +7,9 @@ pub struct PanelType {
     pub id: String,
     pub width: f64,
     pub height: f64,
+    /// Uniform border trimmed from every edge before the panel is usable
+    #[serde(default)]
+    pub trimming: f64,
     /// Optional items that can be added to this panel type to reduce waste
     /// These are tested during optimization to see if they improve efficiency
     #[serde(default)]
@@ -59,6 +62,9 @@ pub struct PanelLayout {
     pub panel_number: u32,
     pub width: f64,
     pub height: f64,
+    /// Trimming margin applied to this panel (same on all sides)
+    #[serde(default)]
+    pub trimming: f64,
     pub placements: Vec<Placement>,
 }
 

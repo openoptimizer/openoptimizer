@@ -11,11 +11,18 @@ pub(super) struct UnusedArea {
 impl Optimizer {
     /// Returns every rectangular area that is still free on the panel.
     pub(super) fn find_unused_areas(&self, layout: &PanelLayout) -> Vec<UnusedArea> {
+        let usable_width = layout.width - (layout.trimming * 2.0);
+        let usable_height = layout.height - (layout.trimming * 2.0);
+
+        if usable_width <= 0.0 || usable_height <= 0.0 {
+            return Vec::new();
+        }
+
         let mut candidates = vec![UnusedArea {
-            x: 0.0,
-            y: 0.0,
-            width: layout.width,
-            height: layout.height,
+            x: layout.trimming,
+            y: layout.trimming,
+            width: usable_width,
+            height: usable_height,
         }];
 
         for placement in &layout.placements {

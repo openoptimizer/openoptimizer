@@ -58,9 +58,38 @@ curl -s -X POST http://localhost:3000/api/optimize ^
 ### Run inside Docker
 
 ```cmd
-docker build --target api -t openoptimizer/openoptimizer-api:latest .
-docker run -d -p 3000:3000 openoptimizer/openoptimizer-api:latest
+docker build --target api -t openoptimizer-api:latest .
+docker run -d -p 3000:3000 openoptimizer-api:latest
 ```
+
+Prefer skipping local builds? Pull the published images directly from Docker Hub:
+
+```cmd
+docker pull openoptimizer/openoptimizer-api:latest
+docker run -d -p 3000:3000 openoptimizer/openoptimizer-api:latest
+
+docker pull openoptimizer/openoptimizer-cli:latest
+docker run --rm -v %CD%\examples:/examples openoptimizer/openoptimizer-cli:latest examples/simple.yaml
+```
+
+Replace `latest` with a tagged version (e.g., `0.0.1`) for reproducible deployments.
+
+### Panel trimming
+
+If a panel needs to be cleaned up along its edges before useful cuts begin, add a `trimming`
+value to that `panel_type`. The optimizer will trim that amount from every side (reducing the
+usable width/height by twice the trimming value) before placing any parts, and the trimmed border
+is reported as waste in the summary.
+
+```yaml
+panel_types:
+  - id: "plywood_8x4"
+    width: 2440.0
+    height: 1220.0
+    trimming: 6.0
+```
+
+Omit the field (or set it to 0) to use the full panel.
 
 ## Example Payloads
 

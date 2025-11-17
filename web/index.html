@@ -402,6 +402,10 @@
                             <input type="number" id="panel-height" placeholder="Height" value="1200">
                         </div>
                     </div>
+                    <div class="form-group">
+                        <input type="number" id="panel-trimming" placeholder="Trimming (optional)" value="0" min="0" step="0.1">
+                        <small>Reserve this much border on every edge before placing items</small>
+                    </div>
                     <button class="btn-success" onclick="addPanel()">+ Add Panel</button>
                 </div>
                 
@@ -523,7 +527,7 @@
                 optimizeReusableRemnants: false,
                 minReusableRemnantSize: null,
                 panels: [
-                    { id: 'std_panel', width: 2440, height: 1220 }
+                    { id: 'std_panel', width: 2440, height: 1220, trimming: 0 }
                 ],
                 items: [
                     { id: 'shelf_a', width: 600, height: 300, quantity: 4, can_rotate: true },
@@ -539,9 +543,9 @@
                 optimizeReusableRemnants: false,
                 minReusableRemnantSize: null,
                 panels: [
-                    { id: 'mdf_8x4', width: 2440, height: 1220 },
-                    { id: 'mdf_6x3', width: 1830, height: 915 },
-                    { id: 'mdf_4x2', width: 1220, height: 610 }
+                    { id: 'mdf_8x4', width: 2440, height: 1220, trimming: 0 },
+                    { id: 'mdf_6x3', width: 1830, height: 915, trimming: 0 },
+                    { id: 'mdf_4x2', width: 1220, height: 610, trimming: 0 }
                 ],
                 items: [
                     { id: 'cabinet_side', width: 800, height: 600, quantity: 8, can_rotate: true },
@@ -559,8 +563,8 @@
                 optimizeReusableRemnants: false,
                 minReusableRemnantSize: null,
                 panels: [
-                    { id: 'plywood_8x4', width: 2440, height: 1220 },
-                    { id: 'plywood_6x4', width: 1830, height: 1220 }
+                    { id: 'plywood_8x4', width: 2440, height: 1220, trimming: 5 },
+                    { id: 'plywood_6x4', width: 1830, height: 1220, trimming: 0 }
                 ],
                 items: [
                     { id: 'shelf_long', width: 900, height: 300, quantity: 6, can_rotate: true },
@@ -575,7 +579,7 @@
         };
         
         let panels = [
-            { id: 'standard_plywood_4x8', width: 2400, height: 1200 }
+            { id: 'standard_plywood_4x8', width: 2400, height: 1200, trimming: 0 }
         ];
         let items = [];
         let currentResult = null;
@@ -584,17 +588,26 @@
             const id = document.getElementById('panel-id').value;
             const width = parseFloat(document.getElementById('panel-width').value);
             const height = parseFloat(document.getElementById('panel-height').value);
+            const trimmingInput = document.getElementById('panel-trimming');
+            const trimmingRaw = trimmingInput.value.trim();
+            const trimming = trimmingRaw === '' ? 0 : parseFloat(trimmingRaw);
             
             if (!id || !width || !height) {
                 showAlert('Please fill in all required panel fields', 'error');
                 return;
             }
+
+            if (isNaN(trimming) || trimming < 0) {
+                showAlert('Trimming must be a non-negative number', 'error');
+                return;
+            }
             
-            panels.push({ id, width, height });
+            panels.push({ id, width, height, trimming });
             renderPanels();
             
             // Clear form
             document.getElementById('panel-id').value = '';
+            trimmingInput.value = '0';
         }
         
         function removePanel(index) {
@@ -618,6 +631,7 @@
                     <div class="item-details">
                         ${p.width} × ${p.height} mm
                     </div>
+                    ${p.trimming && p.trimming > 0 ? `<div class="item-details">Trimming: ${p.trimming} mm border</div>` : ''}
                 </div>
             `).join('');
         }
@@ -809,6 +823,7 @@
                 document.getElementById('min-initial-usage').checked = false;
                 document.getElementById('optimize-reusable-remnants').checked = false;
                 document.getElementById('min-reusable-remnant-size').value = '';
+                document.getElementById('panel-trimming').value = '0';
                 document.getElementById('results').style.display = 'none';
                 document.getElementById('welcome').style.display = 'block';
             }
