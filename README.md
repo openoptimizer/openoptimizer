@@ -72,7 +72,7 @@ docker pull openoptimizer/openoptimizer-cli:latest
 docker run --rm -v %CD%\examples:/examples openoptimizer/openoptimizer-cli:latest examples/simple.yaml
 ```
 
-Replace `latest` with a tagged version (e.g., `0.0.1`) for reproducible deployments.
+Replace `latest` with a tagged version (e.g., `0.0.2`) for reproducible deployments.
 
 ### Panel trimming
 
