@@ -1,5 +1,9 @@
 # OpenOptimizer
 
+<p align="center">
+  <img src="assets/banner.png" alt="OpenOptimizer Banner" width="600">
+</p>
+
 Rust-based cutting optimizer that packs rectangular parts on sheet goods using a best-fit decreasing heuristic. It exposes a reusable core library, an Axum HTTP API (with a lightweight web UI), and a CLI for batch processing.
 
 ## Highlights
