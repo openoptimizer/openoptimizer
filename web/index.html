@@ -3,8 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cutting Stock Optimizer - Interactive Demo</title>
+    <title>OpenOptimizer — Cutting Stock Optimizer</title>
+    <link rel="icon" type="image/svg+xml" href="/assets/logo.svg">
+    <link rel="icon" type="image/png" href="/assets/logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --color-bg: #f8fafc;
+            --color-surface: #ffffff;
+            --color-border: #e2e8f0;
+            --color-border-hover: #cbd5e1;
+            --color-text: #1e293b;
+            --color-text-secondary: #64748b;
+            --color-text-muted: #94a3b8;
+            --color-primary: #0f172a;
+            --color-primary-hover: #1e293b;
+            --color-accent: #3b82f6;
+            --color-accent-light: #eff6ff;
+            --color-success: #10b981;
+            --color-success-light: #ecfdf5;
+            --color-danger: #ef4444;
+            --color-danger-light: #fef2f2;
+            --color-warning: #f59e0b;
+            --color-warning-light: #fffbeb;
+            --radius-sm: 6px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --transition: 150ms ease;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -12,506 +44,914 @@
         }
         
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--color-bg);
+            color: var(--color-text);
             min-height: 100vh;
-            padding: 20px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+
+        /* Layout */
+        .app {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            padding: 0 24px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+            color: var(--color-text);
+        }
+
+        .navbar-logo-img {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+        }
+
+        .navbar-title {
+            font-weight: 700;
+            font-size: 18px;
+            letter-spacing: -0.02em;
+        }
+
+        .navbar-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 380px 1fr;
+            flex: 1;
             overflow: hidden;
         }
         
-        header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-        
-        header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-        
-        .main-content {
-            display: grid;
-            grid-template-columns: 400px 1fr;
-            gap: 30px;
-            padding: 30px;
-        }
-        
         .sidebar {
-            background: #f9f9f9;
-            padding: 25px;
-            border-radius: 8px;
-            height: fit-content;
+            background: var(--color-surface);
+            border-right: 1px solid var(--color-border);
+            overflow-y: auto;
+            height: calc(100vh - 64px);
+        }
+
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .sidebar-section:last-child {
+            border-bottom: none;
+        }
+
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .sidebar-title {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--color-text-secondary);
+        }
+
+        .sidebar-badge {
+            background: var(--color-bg);
+            color: var(--color-text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 10px;
         }
         
         .results-area {
-            min-height: 500px;
-        }
-        
-        .section {
-            margin-bottom: 30px;
-        }
-        
-        .section h2 {
-            color: #667eea;
-            margin-bottom: 15px;
-            font-size: 1.3em;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .section h3 {
-            color: #555;
-            margin-bottom: 12px;
-            font-size: 1.1em;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: #333;
-            font-size: 14px;
-        }
-        
-        input[type="number"],
-        input[type="text"],
-        select {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-        
-        input:focus,
-        select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .checkbox-group input[type="checkbox"] {
-            width: auto;
-        }
-        
-        button {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 6px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            width: 100%;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-secondary {
-            background: #f5f5f5;
-            color: #333;
-            margin-top: 8px;
-        }
-        
-        .btn-secondary:hover:not(:disabled) {
-            background: #e0e0e0;
-        }
-        
-        .btn-danger {
-            background: #ff4757;
-            color: white;
-            padding: 6px 12px;
-            font-size: 12px;
-            width: auto;
-        }
-        
-        .btn-success {
-            background: #2ed573;
-            color: white;
-        }
-        
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-        
-        .item-list {
-            max-height: 300px;
             overflow-y: auto;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            padding: 10px;
-            background: white;
+            height: calc(100vh - 64px);
+            padding: 24px;
+            background: var(--color-bg);
         }
-        
-        .item-card {
-            background: #f9f9f9;
-            padding: 12px;
-            margin-bottom: 8px;
-            border-radius: 6px;
-            border-left: 4px solid #667eea;
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 16px;
         }
-        
-        .item-card:last-child {
+
+        .form-group:last-child {
             margin-bottom: 0;
         }
-        
-        .item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-text);
             margin-bottom: 6px;
         }
-        
-        .item-header strong {
-            color: #667eea;
-        }
-        
-        .item-details {
+
+        .form-hint {
             font-size: 12px;
-            color: #666;
-            line-height: 1.6;
+            color: var(--color-text-muted);
+            margin-top: 4px;
         }
-        
-        .panel-card {
-            background: white;
-            padding: 12px;
-            margin-bottom: 8px;
-            border-radius: 6px;
-            border: 2px solid #e0e0e0;
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            font-size: 14px;
+            font-family: inherit;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            background: var(--color-surface);
+            color: var(--color-text);
+            transition: border-color var(--transition), box-shadow var(--transition);
         }
-        
-        .panel-header {
+
+        .form-input::placeholder {
+            color: var(--color-text-muted);
+        }
+
+        .form-input:hover {
+            border-color: var(--color-border-hover);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--color-accent);
+            box-shadow: 0 0 0 3px var(--color-accent-light);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .form-row-3 {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+        }
+
+        .checkbox-field {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 12px;
+            background: var(--color-bg);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: background var(--transition);
         }
-        
+
+        .checkbox-field:hover {
+            background: var(--color-border);
+        }
+
+        .checkbox-field input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            margin-top: 2px;
+            accent-color: var(--color-accent);
+            cursor: pointer;
+        }
+
+        .checkbox-content {
+            flex: 1;
+        }
+
+        .checkbox-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--color-text);
+            display: block;
+            cursor: pointer;
+        }
+
+        .checkbox-hint {
+            font-size: 12px;
+            color: var(--color-text-muted);
+            margin-top: 2px;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all var(--transition);
+            text-decoration: none;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        .btn-primary {
+            background: var(--color-primary);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: var(--color-primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--color-bg);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: var(--color-border);
+            border-color: var(--color-border-hover);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--color-text-secondary);
+            padding: 8px;
+        }
+
+        .btn-ghost:hover:not(:disabled) {
+            background: var(--color-bg);
+            color: var(--color-text);
+        }
+
+        .btn-danger {
+            background: var(--color-danger-light);
+            color: var(--color-danger);
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            background: var(--color-danger);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
+        .btn-icon {
+            padding: 8px;
+            width: 32px;
+            height: 32px;
+        }
+
+        .btn-icon svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* Cards & Lists */
+        .card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .item-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px;
+            background: var(--color-bg);
+            border-radius: var(--radius-md);
+            transition: background var(--transition);
+        }
+
+        .item-card:hover {
+            background: var(--color-border);
+        }
+
+        .item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .item-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--color-text);
+        }
+
+        .item-meta {
+            font-size: 12px;
+            color: var(--color-text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .item-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            background: var(--color-accent-light);
+            color: var(--color-accent);
+            font-size: 11px;
+            font-weight: 500;
+            border-radius: 4px;
+        }
+
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
-            color: #999;
+            padding: 32px 16px;
+            color: var(--color-text-muted);
         }
-        
-        .empty-state .icon {
-            font-size: 48px;
-            margin-bottom: 10px;
+
+        .empty-state-icon {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 12px;
+            background: var(--color-bg);
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        
+
+        .empty-state-icon svg {
+            width: 24px;
+            height: 24px;
+            color: var(--color-text-muted);
+        }
+
+        .empty-state-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--color-text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .empty-state-text {
+            font-size: 13px;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .stat-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--color-text);
+            letter-spacing: -0.02em;
+        }
+
+        .stat-value.highlight {
+            color: var(--color-success);
+        }
+
+        /* Results */
         #results {
             display: none;
         }
-        
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 15px;
-            margin-bottom: 25px;
+
+        .results-header {
+            margin-bottom: 24px;
         }
-        
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
+
+        .results-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-text);
+            margin-bottom: 4px;
         }
-        
-        .stat-card .label {
-            font-size: 12px;
-            opacity: 0.9;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
+
+        .results-subtitle {
+            font-size: 14px;
+            color: var(--color-text-secondary);
         }
-        
-        .stat-card .value {
-            font-size: 32px;
-            font-weight: bold;
+
+        .panels-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 24px;
         }
-        
+
+        .panel-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+        }
+
+        .panel-chip-count {
+            font-weight: 600;
+            color: var(--color-accent);
+        }
+
         #svg-container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            border: 2px solid #e0e0e0;
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
             overflow-x: auto;
         }
-        
+
+        /* Loading */
         .loading {
+            display: none;
             text-align: center;
-            padding: 60px;
-            color: #666;
+            padding: 80px 20px;
         }
-        
+
         .spinner {
-            display: inline-block;
-            width: 50px;
-            height: 50px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--color-border);
+            border-top-color: var(--color-accent);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 15px;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
         }
-        
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
-        
+
+        .loading-text {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+        }
+
+        /* Welcome */
+        #welcome {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .welcome-banner {
+            max-width: 280px;
+            height: auto;
+            margin-bottom: 24px;
+            border-radius: var(--radius-lg);
+        }
+
+        .welcome-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--color-text);
+            margin-bottom: 8px;
+        }
+
+        .welcome-text {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            max-width: 400px;
+            line-height: 1.6;
+        }
+
+        /* Alerts */
         .alert {
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-weight: 500;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+            font-size: 14px;
+            animation: slideIn 0.2s ease;
         }
-        
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         .alert-error {
-            background: #fee;
-            border: 2px solid #fcc;
-            color: #c00;
+            background: var(--color-danger-light);
+            color: var(--color-danger);
         }
-        
+
         .alert-success {
-            background: #efe;
-            border: 2px solid #cfc;
-            color: #060;
+            background: var(--color-success-light);
+            color: var(--color-success);
         }
-        
+
         .alert-info {
-            background: #e3f2fd;
-            border: 2px solid #90caf9;
-            color: #1565c0;
+            background: var(--color-accent-light);
+            color: var(--color-accent);
         }
-        
-        small {
-            color: #666;
-            font-size: 12px;
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: var(--color-border);
+            margin: 16px 0;
         }
-        
-        .input-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
         }
-        
-        @media (max-width: 1000px) {
+
+        @media (max-width: 900px) {
             .main-content {
                 grid-template-columns: 1fr;
             }
+
+            .sidebar {
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--color-border);
+            }
+
+            .results-area {
+                height: auto;
+            }
+        }
+
+        /* Collapsible sections */
+        .collapsible-trigger {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding: 12px;
+            background: var(--color-bg);
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--color-text-secondary);
+            transition: all var(--transition);
+        }
+
+        .collapsible-trigger:hover {
+            background: var(--color-border);
+            color: var(--color-text);
+        }
+
+        .collapsible-trigger svg {
+            width: 16px;
+            height: 16px;
+            transition: transform var(--transition);
+        }
+
+        .collapsible-trigger.open svg {
+            transform: rotate(180deg);
+        }
+
+        .collapsible-content {
+            display: none;
+            padding-top: 12px;
+        }
+
+        .collapsible-content.open {
+            display: block;
+        }
+
+        /* Select styling */
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 40px;
+        }
+
+        /* Actions row */
+        .actions-row {
+            display: flex;
+            gap: 8px;
+        }
+
+        .actions-row .btn {
+            flex: 1;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🔧 Cutting Stock Optimizer</h1>
-            <p>Interactive tool for optimizing panel cutting layouts</p>
-        </header>
+    <div class="app">
+        <nav class="navbar">
+            <a href="#" class="navbar-brand">
+                <img src="/assets/logo.svg" alt="OpenOptimizer" class="navbar-logo-img">
+                <span class="navbar-title">OpenOptimizer</span>
+            </a>
+            <div class="navbar-actions">
+                <a href="docs/" class="btn btn-ghost">Documentation</a>
+                <a href="https://github.com/openoptimizer/openoptimizer" target="_blank" class="btn btn-secondary btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    GitHub
+                </a>
+            </div>
+        </nav>
         
         <div class="main-content">
-            <!-- Sidebar: Configuration -->
-            <div class="sidebar">
-                <div class="section">
-                    <h2>⚙️ Configuration</h2>
-                    
-                    <div class="form-group">
-                        <label for="cut-width">Cut Width (Kerf)</label>
-                        <input type="number" id="cut-width" value="2" min="0" step="0.1">
-                        <small>Width of saw blade cut</small>
+            <aside class="sidebar">
+                <!-- Configuration -->
+                <div class="sidebar-section">
+                    <div class="sidebar-header">
+                        <span class="sidebar-title">Configuration</span>
                     </div>
                     
-                    <div class="checkbox-group">
+                    <div class="form-group">
+                        <label class="form-label" for="cut-width">Cut Width (Kerf)</label>
+                        <input type="number" id="cut-width" class="form-input" value="2" min="0" step="0.1">
+                        <p class="form-hint">Width of the saw blade cut in mm</p>
+                    </div>
+
+                    <div class="checkbox-field">
                         <input type="checkbox" id="min-initial-usage">
-                        <label for="min-initial-usage" style="margin-bottom: 0;">Minimize initial panel usage (cluster items)</label>
+                        <div class="checkbox-content">
+                            <label class="checkbox-label" for="min-initial-usage">Cluster items on panels</label>
+                            <p class="checkbox-hint">Fill current panel before starting a new one</p>
+                        </div>
                     </div>
-                    <small>Prefer filling the current panel before starting a new one</small>
 
-                    <div class="checkbox-group" style="margin-top: 12px;">
+                    <div class="checkbox-field" style="margin-top: 8px;">
                         <input type="checkbox" id="optimize-reusable-remnants">
-                        <label for="optimize-reusable-remnants" style="margin-bottom: 0;">Optimize for reusable remnants</label>
+                        <div class="checkbox-content">
+                            <label class="checkbox-label" for="optimize-reusable-remnants">Optimize for reusable remnants</label>
+                            <p class="checkbox-hint">Group cuts to leave large reusable offcuts</p>
+                        </div>
                     </div>
-                    <small>Group cuts to leave large reusable offcuts</small>
 
-                    <div class="form-group" style="margin-top: 12px;">
-                        <label for="min-reusable-remnant-size">Minimum reusable remnant area (sq units)</label>
-                        <input type="number" id="min-reusable-remnant-size" placeholder="e.g. 10000" min="0" step="1">
-                        <small>Leave blank if you don't want to track reusable remnants</small>
+                    <div class="form-group" style="margin-top: 16px;">
+                        <label class="form-label" for="min-reusable-remnant-size">Min. remnant area (sq units)</label>
+                        <input type="number" id="min-reusable-remnant-size" class="form-input" placeholder="e.g. 10000" min="0" step="1">
+                        <p class="form-hint">Leave blank to skip remnant tracking</p>
                     </div>
                 </div>
-                
-                <div class="section">
-                    <h2>📐 Panel Types</h2>
-                    <div id="panel-list" class="item-list" style="max-height: 200px;">
-                        <div class="panel-card">
-                            <div class="panel-header">
-                                <strong>standard_plywood_4x8</strong>
-                                <button class="btn-danger" onclick="removePanel(0)">Remove</button>
-                            </div>
-                            <div class="item-details">
-                                2400 × 1200 mm
-                            </div>
-                        </div>
+
+                <!-- Panel Types -->
+                <div class="sidebar-section">
+                    <div class="sidebar-header">
+                        <span class="sidebar-title">Panel Types</span>
+                        <span class="sidebar-badge" id="panel-count">1</span>
                     </div>
                     
-                    <h3 style="margin-top: 20px;">Add Panel Type</h3>
-                    <div class="form-group">
-                        <input type="text" id="panel-id" placeholder="Panel ID (e.g., plywood_4x8)">
-                    </div>
-                    <div class="input-row">
+                    <div id="panel-list" class="item-list" style="max-height: 180px; overflow-y: auto; margin-bottom: 16px;"></div>
+                    
+                    <button class="collapsible-trigger" onclick="toggleCollapsible(this)">
+                        <span>Add panel type</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                    </button>
+                    <div class="collapsible-content">
                         <div class="form-group">
-                            <input type="number" id="panel-width" placeholder="Width" value="2400">
+                            <input type="text" id="panel-id" class="form-input" placeholder="Panel ID (e.g., plywood_4x8)">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <input type="number" id="panel-width" class="form-input" placeholder="Width" value="2400">
+                            </div>
+                            <div class="form-group">
+                                <input type="number" id="panel-height" class="form-input" placeholder="Height" value="1200">
+                            </div>
                         </div>
                         <div class="form-group">
-                            <input type="number" id="panel-height" placeholder="Height" value="1200">
+                            <input type="number" id="panel-trimming" class="form-input" placeholder="Edge trimming (0)" value="0" min="0" step="0.1">
+                            <p class="form-hint">Border reserved on each edge</p>
                         </div>
+                        <button class="btn btn-secondary btn-block" onclick="addPanel()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 5v14"/>
+                                <path d="M5 12h14"/>
+                            </svg>
+                            Add Panel
+                        </button>
                     </div>
-                    <div class="form-group">
-                        <input type="number" id="panel-trimming" placeholder="Trimming (optional)" value="0" min="0" step="0.1">
-                        <small>Reserve this much border on every edge before placing items</small>
-                    </div>
-                    <button class="btn-success" onclick="addPanel()">+ Add Panel</button>
                 </div>
                 
-                <div class="section">
-                    <h2>📦 Items to Cut</h2>
-                    <div id="items-list" class="item-list">
-                        <div class="empty-state">
-                            <div class="icon">📦</div>
-                            <p>No items added yet</p>
-                        </div>
+                <!-- Items -->
+                <div class="sidebar-section">
+                    <div class="sidebar-header">
+                        <span class="sidebar-title">Items to Cut</span>
+                        <span class="sidebar-badge" id="item-count">0</span>
                     </div>
                     
-                    <h3 style="margin-top: 20px;">Add Item</h3>
-                    <div class="form-group">
-                        <input type="text" id="item-id" placeholder="Item ID (e.g., shelf_600x300)">
-                    </div>
-                    <div class="input-row">
+                    <div id="items-list" class="item-list" style="max-height: 200px; overflow-y: auto; margin-bottom: 16px;"></div>
+                    
+                    <button class="collapsible-trigger" onclick="toggleCollapsible(this)">
+                        <span>Add item</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m6 9 6 6 6-6"/>
+                        </svg>
+                    </button>
+                    <div class="collapsible-content">
                         <div class="form-group">
-                            <input type="number" id="item-width" placeholder="Width" value="600">
+                            <input type="text" id="item-id" class="form-input" placeholder="Item ID (e.g., shelf_600x300)">
                         </div>
-                        <div class="form-group">
-                            <input type="number" id="item-height" placeholder="Height" value="300">
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <input type="number" id="item-width" class="form-input" placeholder="Width" value="600">
+                            </div>
+                            <div class="form-group">
+                                <input type="number" id="item-height" class="form-input" placeholder="Height" value="300">
+                            </div>
+                            <div class="form-group">
+                                <input type="number" id="item-quantity" class="form-input" placeholder="Qty" value="1" min="1">
+                            </div>
                         </div>
+                        <div class="checkbox-field" style="margin-bottom: 12px;">
+                            <input type="checkbox" id="item-can-rotate" checked>
+                            <div class="checkbox-content">
+                                <label class="checkbox-label" for="item-can-rotate">Can rotate 90°</label>
+                            </div>
+                        </div>
+                        <button class="btn btn-secondary btn-block" onclick="addItem()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 5v14"/>
+                                <path d="M5 12h14"/>
+                            </svg>
+                            Add Item
+                        </button>
                     </div>
-                    <div class="form-group">
-                        <input type="number" id="item-quantity" placeholder="Quantity" value="1" min="1">
-                    </div>
-                    <div class="checkbox-group" style="margin-bottom: 15px;">
-                        <input type="checkbox" id="item-can-rotate" checked>
-                        <label for="item-can-rotate" style="margin-bottom: 0;">Can Rotate 90°</label>
-                    </div>
-                    <button class="btn-success" onclick="addItem()">+ Add Item</button>
                 </div>
                 
-                <div class="section">
-                    <button class="btn-primary" id="optimize-btn" onclick="runOptimization()">
-                        🚀 Optimize Layout
+                <!-- Actions -->
+                <div class="sidebar-section">
+                    <button class="btn btn-primary btn-block" id="optimize-btn" onclick="runOptimization()">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Run Optimization
                     </button>
-                    <div class="form-group" style="margin-top: 12px;">
-                        <label for="example-select">Example Requests</label>
-                        <select id="example-select" onchange="updateExampleDescription()"></select>
-                        <small id="example-description">Choose an example to preload the form</small>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="example-select">Load Example</label>
+                        <select id="example-select" class="form-input form-select" onchange="updateExampleDescription()"></select>
+                        <p class="form-hint" id="example-description">Choose an example to preload</p>
                     </div>
-                    <button class="btn-secondary" onclick="loadSelectedExample()">
-                        Load Selected Example
-                    </button>
-                    <button class="btn-secondary" onclick="clearAll()">
-                        Clear All
-                    </button>
+                    
+                    <div class="actions-row">
+                        <button class="btn btn-secondary" onclick="loadSelectedExample()">Load</button>
+                        <button class="btn btn-secondary" onclick="clearAll()">Clear All</button>
+                    </div>
                 </div>
-            </div>
+            </aside>
             
-            <!-- Results Area -->
-            <div class="results-area">
-                <div id="loading" class="loading" style="display: none;">
+            <main class="results-area">
+                <div id="loading" class="loading">
                     <div class="spinner"></div>
-                    <p>Running optimization algorithm...</p>
-                    <small>This may take a moment for large problems</small>
+                    <p class="loading-text">Running optimization...</p>
                 </div>
                 
                 <div id="results">
-                    <h2 style="color: #667eea; margin-bottom: 20px;">📊 Optimization Results</h2>
+                    <div class="results-header">
+                        <h1 class="results-title">Optimization Results</h1>
+                        <p class="results-subtitle">Layout calculated successfully</p>
+                    </div>
                     
-                    <div class="stats">
+                    <div class="stats-grid">
                         <div class="stat-card">
-                            <div class="label">Total Panels</div>
-                            <div class="value" id="total-panels">-</div>
+                            <div class="stat-label">Total Panels</div>
+                            <div class="stat-value" id="total-panels">-</div>
                         </div>
                         <div class="stat-card">
-                            <div class="label">Waste</div>
-                            <div class="value" id="waste">-</div>
+                            <div class="stat-label">Material Waste</div>
+                            <div class="stat-value highlight" id="waste">-</div>
                         </div>
                         <div class="stat-card">
-                            <div class="label">Used Area</div>
-                            <div class="value" id="used-area">-</div>
+                            <div class="stat-label">Used Area</div>
+                            <div class="stat-value" id="used-area">-</div>
                         </div>
                         <div class="stat-card">
-                            <div class="label">Total Area</div>
-                            <div class="value" id="total-area">-</div>
+                            <div class="stat-label">Total Area</div>
+                            <div class="stat-value" id="total-area">-</div>
                         </div>
                     </div>
                     
-                    <div class="section">
-                        <h3>Panel Requirements</h3>
-                        <div id="panels-required"></div>
+                    <div class="card" style="margin-bottom: 24px;">
+                        <div class="card-header">
+                            <h3 class="card-title">Panels Required</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="panels-required" class="panels-grid"></div>
+                        </div>
                     </div>
                     
-                    <div class="section">
-                        <h3>Cutting Layout Visualization</h3>
-                        <div id="svg-container"></div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">Cutting Layout</h3>
+                            <button class="btn btn-secondary btn-sm" onclick="downloadResults()">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" x2="12" y1="15" y2="3"/>
+                                </svg>
+                                Export JSON
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div id="svg-container"></div>
+                        </div>
                     </div>
-                    
-                    <button class="btn-secondary" onclick="downloadResults()" style="margin-top: 20px;">
-                        💾 Download Results (JSON)
-                    </button>
                 </div>
                 
-                <div id="welcome" class="empty-state" style="padding-top: 100px;">
-                    <div class="icon">👈</div>
-                    <h2 style="color: #667eea; margin-bottom: 15px;">Welcome to Cutting Stock Optimizer!</h2>
-                    <p style="max-width: 500px; margin: 0 auto; line-height: 1.6;">
-                        Add panel types and items using the sidebar, then click <strong>"Optimize Layout"</strong> 
-                        to calculate the most efficient cutting pattern. You can also load an example to get started quickly.
+                <div id="welcome">
+                    <img src="/assets/banner.png" alt="OpenOptimizer" class="welcome-banner">
+                    <h2 class="welcome-title">Ready to optimize</h2>
+                    <p class="welcome-text">
+                        Add panel types and items in the sidebar, then click <strong>Run Optimization</strong> to calculate the most efficient cutting layout. Or load an example to get started.
                     </p>
                 </div>
-            </div>
+            </main>
         </div>
     </div>
     
@@ -520,8 +960,8 @@
 
         const EXAMPLES = {
             simple: {
-                label: 'Simple Shelves (YAML)',
-                description: 'Single panel type with three shelf/back parts from examples/simple.yaml.',
+                label: 'Simple Shelves',
+                description: 'Single panel type with three shelf/back parts.',
                 cutWidth: 5,
                 minInitialUsage: false,
                 optimizeReusableRemnants: false,
@@ -536,8 +976,8 @@
                 ]
             },
             complex: {
-                label: 'Cabinet Build (JSON)',
-                description: 'Multi-panel cabinet job from examples/complex.json.',
+                label: 'Cabinet Build',
+                description: 'Multi-panel cabinet job with various parts.',
                 cutWidth: 4,
                 minInitialUsage: false,
                 optimizeReusableRemnants: false,
@@ -556,8 +996,8 @@
                 ]
             },
             furniture: {
-                label: 'Furniture Bundle (YAML)',
-                description: 'Bookshelf + desk workload from examples/furniture.yaml.',
+                label: 'Furniture Bundle',
+                description: 'Bookshelf and desk workload combined.',
                 cutWidth: 3,
                 minInitialUsage: true,
                 optimizeReusableRemnants: false,
@@ -583,9 +1023,20 @@
         ];
         let items = [];
         let currentResult = null;
+
+        function toggleCollapsible(trigger) {
+            trigger.classList.toggle('open');
+            const content = trigger.nextElementSibling;
+            content.classList.toggle('open');
+        }
+
+        function updateCounts() {
+            document.getElementById('panel-count').textContent = panels.length;
+            document.getElementById('item-count').textContent = items.reduce((sum, item) => sum + item.quantity, 0);
+        }
         
         function addPanel() {
-            const id = document.getElementById('panel-id').value;
+            const id = document.getElementById('panel-id').value.trim();
             const width = parseFloat(document.getElementById('panel-width').value);
             const height = parseFloat(document.getElementById('panel-height').value);
             const trimmingInput = document.getElementById('panel-trimming');
@@ -605,7 +1056,6 @@
             panels.push({ id, width, height, trimming });
             renderPanels();
             
-            // Clear form
             document.getElementById('panel-id').value = '';
             trimmingInput.value = '0';
         }
@@ -617,27 +1067,44 @@
         
         function renderPanels() {
             const list = document.getElementById('panel-list');
+            updateCounts();
+            
             if (panels.length === 0) {
-                list.innerHTML = '<div class="empty-state"><div class="icon">📐</div><p>No panels defined</p></div>';
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            </svg>
+                        </div>
+                        <p class="empty-state-title">No panels defined</p>
+                        <p class="empty-state-text">Add a panel type to get started</p>
+                    </div>
+                `;
                 return;
             }
             
             list.innerHTML = panels.map((p, i) => `
-                <div class="panel-card">
-                    <div class="panel-header">
-                        <strong>${p.id}</strong>
-                        <button class="btn-danger" onclick="removePanel(${i})">Remove</button>
+                <div class="item-card">
+                    <div class="item-info">
+                        <span class="item-name">${p.id}</span>
+                        <span class="item-meta">
+                            ${p.width} × ${p.height} mm
+                            ${p.trimming > 0 ? `<span class="item-tag">trim: ${p.trimming}</span>` : ''}
+                        </span>
                     </div>
-                    <div class="item-details">
-                        ${p.width} × ${p.height} mm
-                    </div>
-                    ${p.trimming && p.trimming > 0 ? `<div class="item-details">Trimming: ${p.trimming} mm border</div>` : ''}
+                    <button class="btn btn-icon btn-ghost" onclick="removePanel(${i})" title="Remove">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 6 6 18"/>
+                            <path d="m6 6 12 12"/>
+                        </svg>
+                    </button>
                 </div>
             `).join('');
         }
         
         function addItem() {
-            const id = document.getElementById('item-id').value;
+            const id = document.getElementById('item-id').value.trim();
             const width = parseFloat(document.getElementById('item-width').value);
             const height = parseFloat(document.getElementById('item-height').value);
             const quantity = parseInt(document.getElementById('item-quantity').value);
@@ -651,7 +1118,6 @@
             items.push({ id, width, height, quantity, can_rotate: canRotate });
             renderItems();
             
-            // Clear form
             document.getElementById('item-id').value = '';
             document.getElementById('item-quantity').value = '1';
         }
@@ -663,21 +1129,41 @@
         
         function renderItems() {
             const list = document.getElementById('items-list');
+            updateCounts();
+            
             if (items.length === 0) {
-                list.innerHTML = '<div class="empty-state"><div class="icon">📦</div><p>No items added yet</p></div>';
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
+                                <path d="m3.3 7 8.7 5 8.7-5"/>
+                                <path d="M12 22V12"/>
+                            </svg>
+                        </div>
+                        <p class="empty-state-title">No items added</p>
+                        <p class="empty-state-text">Add items to cut from panels</p>
+                    </div>
+                `;
                 return;
             }
             
             list.innerHTML = items.map((item, i) => `
                 <div class="item-card">
-                    <div class="item-header">
-                        <strong>${item.id}</strong>
-                        <button class="btn-danger" onclick="removeItem(${i})">Remove</button>
+                    <div class="item-info">
+                        <span class="item-name">${item.id}</span>
+                        <span class="item-meta">
+                            ${item.width} × ${item.height} mm
+                            <span class="item-tag">×${item.quantity}</span>
+                            ${item.can_rotate ? '<span class="item-tag">rotatable</span>' : ''}
+                        </span>
                     </div>
-                    <div class="item-details">
-                        ${item.width} × ${item.height} mm<br>
-                        Quantity: ${item.quantity} • ${item.can_rotate ? '🔄 Rotatable' : '🔒 Fixed'}
-                    </div>
+                    <button class="btn btn-icon btn-ghost" onclick="removeItem(${i})" title="Remove">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 6 6 18"/>
+                            <path d="m6 6 12 12"/>
+                        </svg>
+                    </button>
                 </div>
             `).join('');
         }
@@ -731,7 +1217,7 @@
                 
             } catch (error) {
                 showAlert('Optimization failed: ' + error.message, 'error');
-                document.getElementById('welcome').style.display = 'block';
+                document.getElementById('welcome').style.display = 'flex';
             } finally {
                 document.getElementById('loading').style.display = 'none';
             }
@@ -743,15 +1229,14 @@
             document.getElementById('used-area').textContent = (result.summary.used_area / 1000000).toFixed(2) + ' m²';
             document.getElementById('total-area').textContent = (result.summary.total_area / 1000000).toFixed(2) + ' m²';
             
-            // Panels required
             const panelsReq = document.getElementById('panels-required');
             panelsReq.innerHTML = Object.entries(result.panels_required).map(([id, count]) => `
-                <div class="panel-card">
-                    <strong>${id}</strong>: ${count} panel${count > 1 ? 's' : ''}
+                <div class="panel-chip">
+                    <span>${id}</span>
+                    <span class="panel-chip-count">×${count}</span>
                 </div>
             `).join('');
             
-            // Generate SVG
             try {
                 const svgResponse = await fetch(`${API_BASE}/generate/svg`, {
                     method: 'POST',
@@ -811,7 +1296,7 @@
             
             renderPanels();
             renderItems();
-            showAlert(`${example.label} loaded! Click "Optimize Layout" to see results.`, 'info');
+            showAlert(`"${example.label}" loaded. Click Run Optimization to see results.`, 'info');
         }
         
         function clearAll() {
@@ -825,7 +1310,7 @@
                 document.getElementById('min-reusable-remnant-size').value = '';
                 document.getElementById('panel-trimming').value = '0';
                 document.getElementById('results').style.display = 'none';
-                document.getElementById('welcome').style.display = 'block';
+                document.getElementById('welcome').style.display = 'flex';
             }
         }
         
@@ -842,14 +1327,25 @@
         }
         
         function showAlert(message, type) {
+            const existing = document.querySelector('.alert');
+            if (existing) existing.remove();
+            
             const alertDiv = document.createElement('div');
             alertDiv.className = `alert alert-${type}`;
-            alertDiv.textContent = message;
+            alertDiv.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    ${type === 'success' ? '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>' : 
+                      type === 'error' ? '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>' :
+                      '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>'}
+                </svg>
+                <span>${message}</span>
+            `;
             
             const sidebar = document.querySelector('.sidebar');
-            sidebar.insertBefore(alertDiv, sidebar.firstChild);
+            const firstSection = sidebar.querySelector('.sidebar-section');
+            sidebar.insertBefore(alertDiv, firstSection);
             
-            setTimeout(() => alertDiv.remove(), 5000);
+            setTimeout(() => alertDiv.remove(), 4000);
         }
         
         // Initialize

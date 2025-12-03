@@ -1,0 +1,36 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rustGradient" x1="0" y1="0" x2="300" y2="300" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#E06C75" /> <!-- Light Rust -->
+      <stop offset="100%" stop-color="#CE412B" /> <!-- Dark Rust -->
+    </linearGradient>
+    <linearGradient id="sheetGradient" x1="300" y1="300" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#475569" /> <!-- Slate Light -->
+      <stop offset="100%" stop-color="#1E293B" /> <!-- Slate Dark -->
+    </linearGradient>
+  </defs>
+
+  <!-- Background Circle (Optional: Remove for transparent logo) -->
+  <!-- <circle cx="256" cy="256" r="256" fill="#ffffff" opacity="0.05"/> -->
+
+  <g transform="translate(32, 32)">
+    <!-- Part 1: The Primary Block (Top Left - Rust Color) -->
+    <!-- Represents the priority piece being fitted -->
+    <rect x="0" y="0" width="280" height="280" rx="20" fill="url(#rustGradient)" />
+
+    <!-- Part 2: The Sidebar (Right - Dark Engineering Color) -->
+    <!-- Represents the remaining sheet width being utilized -->
+    <rect x="300" y="0" width="148" height="448" rx="20" fill="#2C3E50" />
+
+    <!-- Part 3: The Footer (Bottom Left - Lighter Accent) -->
+    <!-- Represents the best-fit decreasing logic filling the gap -->
+    <rect x="0" y="300" width="280" height="148" rx="20" fill="#DEA584" />
+  </g>
+  
+  <!-- OPTIONAL: Text Label (Comment out if you want icon only) -->
+  <!-- 
+  <text x="256" y="500" font-family="Arial, sans-serif" font-size="60" font-weight="bold" fill="#2C3E50" text-anchor="middle" letter-spacing="-1">
+    OpenOptimizer
+  </text> 
+  -->
+</svg>
