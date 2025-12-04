@@ -59,7 +59,13 @@ impl Optimizer {
         });
 
         let layouts = self.best_fit_decreasing_optimize(&expanded_items)?;
-        let (final_layouts, optional_items_used) = self.try_add_optional_items(layouts)?;
+        let (mut final_layouts, optional_items_used) = self.try_add_optional_items(layouts)?;
+
+        // Compute unused areas for each panel in the final output
+        for layout in &mut final_layouts {
+            layout.unused_areas = self.compute_output_unused_areas(layout);
+        }
+
         let panels_required = self.count_panels(&final_layouts);
         let summary = self.calculate_summary(&final_layouts);
 
@@ -143,6 +149,7 @@ impl Optimizer {
                     height: panel_type.height,
                     trimming: panel_type.trimming,
                     placements: vec![placement],
+                    unused_areas: Vec::new(), // Populated after optimization completes
                 });
             }
         }

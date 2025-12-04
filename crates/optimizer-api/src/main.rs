@@ -119,7 +119,7 @@ fn generate_svg_content(result: &OptimizationResult) -> Result<String, AppError>
         .sum();
 
     let svg_width = (max_width / scale) + (2.0 * margin);
-    let svg_height = (total_height / scale) + (2.0 * margin);
+    let svg_height = (total_height / scale) + (2.0 * margin) + 30.0; // Extra space for legend
 
     // SVG header
     writeln!(&mut svg, r#"<?xml version="1.0" encoding="UTF-8"?>"#).unwrap();
@@ -174,15 +174,62 @@ fn generate_svg_content(result: &OptimizationResult) -> Result<String, AppError>
                      px + pw / 2.0, py + ph / 2.0 + 3.0, label).unwrap();
         }
 
+        // Draw unused areas (waste regions)
+        for unused in &layout.unused_areas {
+            let ux = x + (unused.x / scale);
+            let uy = y_offset + (unused.y / scale);
+            let uw = unused.width / scale;
+            let uh = unused.height / scale;
+
+            // Draw unused area with diagonal hatch pattern
+            writeln!(&mut svg, r##"  <rect x="{}" y="{}" width="{}" height="{}" fill="#fee2e2" stroke="#ef4444" stroke-width="1" stroke-dasharray="4,2" opacity="0.6"/>"##,
+                     ux, uy, uw, uh).unwrap();
+
+            // Only show label if area is large enough
+            if uw > 40.0 && uh > 20.0 {
+                let area_sqm = (unused.width * unused.height) / 1_000_000.0;
+                let label = format!("{:.2}m²", area_sqm);
+                writeln!(&mut svg, r##"  <text x="{}" y="{}" font-family="Arial" font-size="9" fill="#dc2626" text-anchor="middle" opacity="0.8">{}</text>"##,
+                         ux + uw / 2.0, uy + uh / 2.0 + 3.0, label).unwrap();
+            }
+        }
+
         y_offset += panel_height + panel_spacing;
     }
+
+    // Legend
+    let legend_y = svg_height - margin - 5.0;
+    writeln!(
+        &mut svg,
+        r##"  <rect x="{}" y="{}" width="12" height="12" fill="#4CAF50" stroke="#2E7D32" stroke-width="1" opacity="0.7"/>"##,
+        margin, legend_y
+    )
+    .unwrap();
+    writeln!(
+        &mut svg,
+        r##"  <text x="{}" y="{}" font-family="Arial" font-size="11" fill="#333">Placed items</text>"##,
+        margin + 16.0, legend_y + 10.0
+    )
+    .unwrap();
+    writeln!(
+        &mut svg,
+        r##"  <rect x="{}" y="{}" width="12" height="12" fill="#fee2e2" stroke="#ef4444" stroke-width="1" stroke-dasharray="4,2" opacity="0.6"/>"##,
+        margin + 100.0, legend_y
+    )
+    .unwrap();
+    writeln!(
+        &mut svg,
+        r##"  <text x="{}" y="{}" font-family="Arial" font-size="11" fill="#333">Unused areas</text>"##,
+        margin + 116.0, legend_y + 10.0
+    )
+    .unwrap();
 
     // Summary
     writeln!(
         &mut svg,
         r##"  <text x="{}" y="{}" font-family="Arial" font-size="12" fill="#666">"##,
-        margin,
-        svg_height - margin + 15.0
+        margin + 250.0,
+        legend_y + 10.0
     )
     .unwrap();
     writeln!(

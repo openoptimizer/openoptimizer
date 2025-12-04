@@ -12,6 +12,7 @@ Rust-based cutting optimizer that packs rectangular parts on sheet goods using a
 - 📦 **Three curated examples** – `examples/simple.yaml`, `examples/complex.json`, and `examples/furniture.yaml` cover the most common workloads.
 - 🌐 **Documented API** – OpenAPI spec lives in `openapi.yaml`; served endpoints power the demo UI and any custom integrations.
 - 🧩 **Composable crates** – `optimizer-core`, `optimizer-api`, and `optimizer-cli` share the same logic for cross-validation.
+- 📐 **Unused areas** – Each panel layout includes rectangular leftover regions, enabling downstream tools to visualize or reuse remnants.
 
 ## Repository Layout
 
@@ -94,6 +95,29 @@ panel_types:
 ```
 
 Omit the field (or set it to 0) to use the full panel.
+
+### Unused areas
+
+Each `PanelLayout` in the response includes an `unused_areas` array containing the rectangular
+leftover regions on that panel after all placements. These areas are guaranteed to be rectangles
+(4 edges); when the free space forms an irregular shape, the optimizer splits it and keeps the
+rectangle with the largest area (square meters).
+
+Example response snippet:
+
+```json
+{
+  "panel_type_id": "plywood_8x4",
+  "panel_number": 1,
+  "placements": [ ... ],
+  "unused_areas": [
+    { "x": 1200.0, "y": 0.0, "width": 1240.0, "height": 1220.0 },
+    { "x": 0.0, "y": 600.0, "width": 1200.0, "height": 620.0 }
+  ]
+}
+```
+
+Use these rectangles to visualize waste, plan reusable offcuts, or feed into downstream nesting.
 
 ## Example Payloads
 

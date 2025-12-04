@@ -55,6 +55,16 @@ pub struct Placement {
     pub rotated: bool,
 }
 
+/// Rectangular unused (leftover) area on a panel after placements.
+/// When free space has more than 4 edges, the rectangle with the largest area (sq meters) is preferred.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnusedArea {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
 /// Layout of a single panel
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PanelLayout {
@@ -66,6 +76,10 @@ pub struct PanelLayout {
     #[serde(default)]
     pub trimming: f64,
     pub placements: Vec<Placement>,
+    /// Rectangular unused (leftover) areas on this panel.
+    /// Rectangles with the largest area (sq meters) are preferred when free space must be split.
+    #[serde(default)]
+    pub unused_areas: Vec<UnusedArea>,
 }
 
 /// Summary statistics

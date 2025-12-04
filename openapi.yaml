@@ -231,6 +231,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Placement'
+        unused_areas:
+          type: array
+          description: Rectangular leftover areas on this panel after placements. Larger rectangles are preferred when free space must be split.
+          items:
+            $ref: '#/components/schemas/UnusedArea'
+          default: []
     Placement:
       type: object
       required:
@@ -257,6 +263,31 @@ components:
           format: double
         rotated:
           type: boolean
+    UnusedArea:
+      type: object
+      description: A rectangular leftover area on a panel after placements. When free space has more than 4 edges, the larger rectangular portion is preferred.
+      required:
+        - x
+        - y
+        - width
+        - height
+      properties:
+        x:
+          type: number
+          format: double
+          description: X coordinate of the unused area's top-left corner.
+        y:
+          type: number
+          format: double
+          description: Y coordinate of the unused area's top-left corner.
+        width:
+          type: number
+          format: double
+          description: Width of the unused rectangular area.
+        height:
+          type: number
+          format: double
+          description: Height of the unused rectangular area.
     Summary:
       type: object
       required:

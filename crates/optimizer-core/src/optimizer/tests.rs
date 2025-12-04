@@ -42,6 +42,55 @@ fn test_simple_optimization() {
 }
 
 #[test]
+fn test_unused_areas_in_output() {
+    let request = OptimizationRequest {
+        cut_width: 2.0,
+        panel_types: vec![PanelType {
+            id: "panel_a".to_string(),
+            width: 1000.0,
+            height: 1000.0,
+            trimming: 0.0,
+            optional_items: vec![],
+        }],
+        items: vec![Item {
+            id: "item1".to_string(),
+            width: 400.0,
+            height: 300.0,
+            quantity: 1,
+            can_rotate: false,
+        }],
+        min_initial_usage: false,
+        min_reusable_remnant_size: None,
+        optimize_for_reusable_remnants: false,
+    };
+
+    let optimizer = Optimizer::new(request).unwrap();
+    let result = optimizer.optimize().unwrap();
+
+    assert_eq!(result.layouts.len(), 1);
+    let layout = &result.layouts[0];
+
+    // Should have unused areas since item is much smaller than panel
+    assert!(!layout.unused_areas.is_empty());
+
+    // All unused areas should be valid rectangles (positive dimensions)
+    for area in &layout.unused_areas {
+        assert!(area.width > 0.0);
+        assert!(area.height > 0.0);
+        assert!(area.x >= 0.0);
+        assert!(area.y >= 0.0);
+    }
+
+    // Total unused area should roughly match waste area
+    let total_unused: f64 = layout.unused_areas.iter().map(|a| a.width * a.height).sum();
+    let item_area = 400.0 * 300.0;
+    let panel_area = 1000.0 * 1000.0;
+
+    // Allow some tolerance due to cut width
+    assert!(total_unused > (panel_area - item_area) * 0.8);
+}
+
+#[test]
 fn test_reusable_remnant_size() {
     let request = OptimizationRequest {
         cut_width: 3.0,
@@ -220,6 +269,7 @@ fn test_unused_area_allows_additional_row() {
                 rotated: false,
             },
         ],
+        unused_areas: Vec::new(),
     };
 
     let areas = optimizer.find_unused_areas(&layout);
@@ -315,6 +365,7 @@ fn test_try_place_item_after_vertical_piece() {
                 rotated: false,
             },
         ],
+        unused_areas: Vec::new(),
     };
 
     let next_item = Item {
