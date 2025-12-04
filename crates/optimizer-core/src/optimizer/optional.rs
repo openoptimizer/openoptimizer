@@ -1,13 +1,30 @@
 use super::*;
+use crate::types::OptionalItem;
 use std::cmp::Ordering;
+
+/// Minimum effective waste percentage required before optional items are considered.
+const MIN_WASTE_THRESHOLD_PERCENT: f64 = 8.0;
 
 impl Optimizer {
     /// Attempts to insert optional items to reduce waste on already packed panels.
+    /// Optional items are only considered when effective waste exceeds 8%.
+    /// Items are tried in descending priority order.
     pub(super) fn try_add_optional_items(
         &self,
         layouts: Vec<PanelLayout>,
     ) -> Result<(Vec<PanelLayout>, Vec<String>)> {
-        let mut optional_items_pool: Vec<(String, Item)> = Vec::new();
+        let initial_summary = self.calculate_summary(&layouts);
+        let effective_waste_pct = initial_summary
+            .actual_waste_percentage
+            .unwrap_or(initial_summary.waste_percentage);
+
+        // Only consider optional items if effective waste exceeds threshold
+        if effective_waste_pct <= MIN_WASTE_THRESHOLD_PERCENT {
+            return Ok((layouts, Vec::new()));
+        }
+
+        // Collect and sort optional items by priority (descending)
+        let mut optional_items_pool: Vec<(String, OptionalItem)> = Vec::new();
         for panel_type in &self.request.panel_types {
             for item in &panel_type.optional_items {
                 optional_items_pool.push((panel_type.id.clone(), item.clone()));
@@ -18,28 +35,29 @@ impl Optimizer {
             return Ok((layouts, Vec::new()));
         }
 
+        // Sort by priority descending (higher priority first)
+        optional_items_pool.sort_by(|a, b| b.1.priority.cmp(&a.1.priority));
+
         let mut best_layouts = layouts.clone();
-        let mut best_summary = self.calculate_summary(&best_layouts);
+        let mut best_summary = initial_summary;
         let mut items_used: Vec<String> = Vec::new();
 
         for (panel_type_id, optional_item) in optional_items_pool {
-            let expanded_optional = self.expand_single_item(&optional_item);
+            let test_item = self.optional_to_item(&optional_item);
             let mut test_layouts = best_layouts.clone();
-            let mut placed_count = 0;
+            let mut placed = false;
 
-            for expanded_item in &expanded_optional {
-                for layout in &mut test_layouts {
-                    if layout.panel_type_id == panel_type_id {
-                        if let Some(placement) = self.try_place_item(expanded_item, layout) {
-                            layout.placements.push(placement);
-                            placed_count += 1;
-                            break;
-                        }
+            for layout in &mut test_layouts {
+                if layout.panel_type_id == panel_type_id {
+                    if let Some(placement) = self.try_place_item(&test_item, layout) {
+                        layout.placements.push(placement);
+                        placed = true;
+                        break;
                     }
                 }
             }
 
-            if placed_count > 0 {
+            if placed {
                 let test_summary = self.calculate_summary(&test_layouts);
                 let best_waste = best_summary
                     .actual_waste_area
@@ -51,7 +69,7 @@ impl Optimizer {
                 if test_waste < best_waste {
                     best_layouts = test_layouts;
                     best_summary = test_summary;
-                    items_used.push(format!("{}x{}", placed_count, optional_item.id));
+                    items_used.push(optional_item.id.clone());
                 }
             }
         }
@@ -68,22 +86,14 @@ impl Optimizer {
             .map(|(placement, _, _, _)| placement)
     }
 
-    /// Expands a single optional item into concrete pieces so they can be packed.
-    fn expand_single_item(&self, item: &Item) -> Vec<Item> {
-        let mut expanded = Vec::new();
-        for i in 0..item.quantity {
-            expanded.push(Item {
-                id: if item.quantity > 1 {
-                    format!("{}_{}", item.id, i + 1)
-                } else {
-                    item.id.clone()
-                },
-                width: item.width,
-                height: item.height,
-                quantity: 1,
-                can_rotate: item.can_rotate,
-            });
+    /// Converts an OptionalItem to an Item for placement logic.
+    fn optional_to_item(&self, opt: &OptionalItem) -> Item {
+        Item {
+            id: opt.id.clone(),
+            width: opt.width,
+            height: opt.height,
+            quantity: 1,
+            can_rotate: opt.can_rotate,
         }
-        expanded
     }
 }

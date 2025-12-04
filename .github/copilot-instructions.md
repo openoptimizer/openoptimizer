@@ -7,6 +7,7 @@ These notes keep AI-assisted contributions consistent with the current vision of
 - The optimizer **only** uses the Best Fit Decreasing heuristic. Do not reintroduce other strategies or algorithm switches.
 - Shared types live in `crates/optimizer-core/src/types.rs`. Any schema change must be reflected in `openapi.yaml`, the CLI, and the web UI payload builders.
 - Optional items are strictly treated as waste-reduction fillers; never make them mandatory inputs.
+- Optional items use the `OptionalItem` type (not `Item`) with a `priority` field (no `quantity`). They are only considered when effective waste exceeds 8%.
 
 ## Coding Standards
 

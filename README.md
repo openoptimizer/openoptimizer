@@ -119,6 +119,37 @@ Example response snippet:
 
 Use these rectangles to visualize waste, plan reusable offcuts, or feed into downstream nesting.
 
+### Optional items
+
+Each `PanelType` can include an `optional_items` array of filler pieces that the optimizer will
+attempt to place **only when the effective waste exceeds 8%**. This is useful for producing spare
+parts, test cuts, or small components that are nice-to-have but not required.
+
+Optional items differ from regular items:
+- They have no `quantity` – each entry represents a single piece.
+- They include a `priority` field (higher values are tried first).
+- They are only considered after all required items are placed and waste is above the threshold.
+
+```yaml
+panel_types:
+  - id: "plywood_8x4"
+    width: 2440.0
+    height: 1220.0
+    optional_items:
+      - id: "spare_shelf"
+        width: 300.0
+        height: 200.0
+        can_rotate: true
+        priority: 10
+      - id: "test_piece"
+        width: 100.0
+        height: 100.0
+        can_rotate: true
+        priority: 5
+```
+
+The `optional_items_used` array in the response lists which optional items were successfully placed.
+
 ## Example Payloads
 
 | File | Format | Purpose |

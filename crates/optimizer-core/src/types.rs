@@ -1,6 +1,19 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Optional item that can be placed to reduce waste.
+/// These are only considered when effective waste exceeds 8%.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OptionalItem {
+    pub id: String,
+    pub width: f64,
+    pub height: f64,
+    pub can_rotate: bool,
+    /// Higher priority items are tried first (default: 0)
+    #[serde(default)]
+    pub priority: i32,
+}
+
 /// Panel type - describes an available panel size/type
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PanelType {
@@ -10,10 +23,10 @@ pub struct PanelType {
     /// Uniform border trimmed from every edge before the panel is usable
     #[serde(default)]
     pub trimming: f64,
-    /// Optional items that can be added to this panel type to reduce waste
-    /// These are tested during optimization to see if they improve efficiency
+    /// Optional filler items that can be placed to reduce waste.
+    /// Only considered when effective waste exceeds 8%; sorted by priority (descending).
     #[serde(default)]
-    pub optional_items: Vec<Item>,
+    pub optional_items: Vec<OptionalItem>,
 }
 
 /// Item to be cut

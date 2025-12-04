@@ -145,14 +145,44 @@ components:
           format: double
         optional_items:
           type: array
-          description: Optional filler items that can be added if they reduce waste.
+          description: |
+            Optional filler items that can be placed to reduce waste.
+            Only considered when effective waste exceeds 8%.
+            Items are tried in descending priority order (higher priority first).
           items:
-            $ref: '#/components/schemas/Item'
+            $ref: '#/components/schemas/OptionalItem'
           default: []
         trimming:
           type: number
           format: double
           description: Uniform border (in panel units) trimmed from every edge before placing items.
+          default: 0
+    OptionalItem:
+      type: object
+      description: |
+        A single optional filler item that can be placed to reduce waste.
+        Only considered when effective waste exceeds 8%.
+      required:
+        - id
+        - width
+        - height
+        - can_rotate
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the optional item.
+        width:
+          type: number
+          format: double
+        height:
+          type: number
+          format: double
+        can_rotate:
+          type: boolean
+          description: Whether the item may be rotated by 90 degrees.
+        priority:
+          type: integer
+          description: Higher priority items are tried first.
           default: 0
     Item:
       type: object
