@@ -98,42 +98,31 @@ impl Optimizer {
         expanded
     }
 
-    /// Places items using best-fit decreasing across the already opened panels.
+    /// Places items using best-fit decreasing with bottom-left placement strategy.
+    /// Items are placed as far left and down as possible to minimize fragmentation.
     fn best_fit_decreasing_optimize(&self, items: &[Item]) -> Result<Vec<PanelLayout>> {
         let mut layouts = Vec::new();
 
         for item in items {
-            let mut best_fit: Option<(usize, Placement, f64, f64)> = None;
+            let mut best_fit: Option<(usize, Placement, f64)> = None;
 
+            // Try to place on existing panels using bottom-left-fill strategy
             for (idx, layout) in layouts.iter().enumerate() {
-                let candidates = self.generate_candidate_placements(item, layout);
-                for (placement, base_score, area_w, area_h) in candidates {
-                    let leftover = (area_w * area_h) - (placement.width * placement.height);
-                    let (primary_score, secondary_score) = if self.request.min_initial_usage {
-                        (placement.y * 10000.0 + placement.x, leftover)
-                    } else if self.request.optimize_for_reusable_remnants {
-                        (-leftover, base_score)
-                    } else {
-                        (leftover, placement.y * 10000.0 + placement.x)
-                    };
-
+                if let Some((placement, score)) = self.find_best_placement(item, layout) {
                     match best_fit {
                         None => {
-                            best_fit = Some((idx, placement, primary_score, secondary_score));
+                            best_fit = Some((idx, placement, score));
                         }
-                        Some((_, _, best_primary, best_secondary)) => {
-                            if primary_score < best_primary
-                                || (primary_score - best_primary).abs() < f64::EPSILON
-                                    && secondary_score < best_secondary
-                            {
-                                best_fit = Some((idx, placement, primary_score, secondary_score));
+                        Some((_, _, best_score)) => {
+                            if score < best_score {
+                                best_fit = Some((idx, placement, score));
                             }
                         }
                     }
                 }
             }
 
-            if let Some((idx, placement, _, _)) = best_fit {
+            if let Some((idx, placement, _)) = best_fit {
                 layouts[idx].placements.push(placement);
             } else if let Some((panel_type, placement)) = self.place_on_new_panel(item)? {
                 let panel_number = layouts
@@ -157,7 +146,197 @@ impl Optimizer {
         Ok(layouts)
     }
 
+    /// Finds the best placement position for an item on a panel using bottom-left-fill.
+    /// Returns the placement and a score (lower is better).
+    fn find_best_placement(&self, item: &Item, layout: &PanelLayout) -> Option<(Placement, f64)> {
+        let unused_areas = self.find_unused_areas(layout);
+        let mut best: Option<(Placement, f64)> = None;
+
+        for area in &unused_areas {
+            // Try normal orientation
+            if item.width <= area.width && item.height <= area.height {
+                let score = self.calculate_placement_score(
+                    area.x,
+                    area.y,
+                    item.width,
+                    item.height,
+                    area,
+                    layout,
+                );
+                let placement = Placement {
+                    item_id: item.id.clone(),
+                    x: area.x,
+                    y: area.y,
+                    width: item.width,
+                    height: item.height,
+                    rotated: false,
+                };
+
+                match best {
+                    None => best = Some((placement, score)),
+                    Some((_, best_score)) if score < best_score => {
+                        best = Some((placement, score));
+                    }
+                    _ => {}
+                }
+            }
+
+            // Try rotated orientation
+            if item.can_rotate && item.height <= area.width && item.width <= area.height {
+                let score = self.calculate_placement_score(
+                    area.x,
+                    area.y,
+                    item.height,
+                    item.width,
+                    area,
+                    layout,
+                );
+                let placement = Placement {
+                    item_id: item.id.clone(),
+                    x: area.x,
+                    y: area.y,
+                    width: item.height,
+                    height: item.width,
+                    rotated: true,
+                };
+
+                match best {
+                    None => best = Some((placement, score)),
+                    Some((_, best_score)) if score < best_score => {
+                        best = Some((placement, score));
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        best
+    }
+
+    /// Calculates a placement score for bottom-left-fill strategy.
+    /// Lower score = better placement. Prioritizes:
+    /// 1. Bottom-left position (y first, then x)
+    /// 2. Tight fit (less wasted space in the free rectangle)
+    /// 3. Contact with existing pieces (better packing)
+    fn calculate_placement_score(
+        &self,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        area: &layout::UnusedArea,
+        layout: &PanelLayout,
+    ) -> f64 {
+        // Primary: Bottom-left position - items should fill from bottom-left
+        // Heavily weight Y to ensure rows are filled before going up
+        let position_score = y * 10000.0 + x;
+
+        // Secondary: How well does the item fit the free rectangle?
+        // Prefer placements that leave useful remaining space
+        let width_leftover = area.width - width - self.request.cut_width;
+        let height_leftover = area.height - height - self.request.cut_width;
+
+        // Penalty for creating thin slivers that are hard to use
+        let sliver_penalty = if width_leftover > 0.0 && width_leftover < 50.0 {
+            (50.0 - width_leftover) * 10.0
+        } else {
+            0.0
+        } + if height_leftover > 0.0 && height_leftover < 50.0 {
+            (50.0 - height_leftover) * 10.0
+        } else {
+            0.0
+        };
+
+        // Tertiary: Contact score - prefer placements adjacent to existing pieces
+        let contact_score = self.calculate_contact_score(x, y, width, height, layout);
+
+        // Combine scores: position is most important, then contact, then sliver avoidance
+        if self.request.min_initial_usage {
+            // Pack tightly from origin
+            position_score - contact_score * 100.0 + sliver_penalty
+        } else if self.request.optimize_for_reusable_remnants {
+            // Prefer leaving large contiguous areas
+            position_score + sliver_penalty * 2.0 - contact_score * 50.0
+        } else {
+            // Default: bottom-left with contact bonus
+            position_score - contact_score * 200.0 + sliver_penalty
+        }
+    }
+
+    /// Calculates how much contact this placement has with existing pieces or edges.
+    /// Higher contact score = better (placement touches more edges/pieces).
+    fn calculate_contact_score(
+        &self,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        layout: &PanelLayout,
+    ) -> f64 {
+        let mut contact = 0.0;
+        let eps = 1.0;
+
+        // Contact with panel edges (trimming boundary)
+        if (x - layout.trimming).abs() < eps {
+            contact += height; // Left edge contact
+        }
+        if (y - layout.trimming).abs() < eps {
+            contact += width; // Bottom edge contact
+        }
+
+        let right_boundary = layout.width - layout.trimming;
+        let top_boundary = layout.height - layout.trimming;
+
+        if (x + width - right_boundary).abs() < eps {
+            contact += height; // Right edge contact
+        }
+        if (y + height - top_boundary).abs() < eps {
+            contact += width; // Top edge contact
+        }
+
+        // Contact with existing placements
+        for placement in &layout.placements {
+            let p_right = placement.x + placement.width;
+            let p_top = placement.y + placement.height;
+
+            // Check for horizontal adjacency (left/right contact)
+            let v_overlap_start = y.max(placement.y);
+            let v_overlap_end = (y + height).min(p_top);
+            if v_overlap_end > v_overlap_start {
+                let v_overlap = v_overlap_end - v_overlap_start;
+
+                // Item's left edge touches placement's right edge
+                if (x - p_right - self.request.cut_width).abs() < eps {
+                    contact += v_overlap;
+                }
+                // Item's right edge touches placement's left edge
+                if (x + width + self.request.cut_width - placement.x).abs() < eps {
+                    contact += v_overlap;
+                }
+            }
+
+            // Check for vertical adjacency (top/bottom contact)
+            let h_overlap_start = x.max(placement.x);
+            let h_overlap_end = (x + width).min(p_right);
+            if h_overlap_end > h_overlap_start {
+                let h_overlap = h_overlap_end - h_overlap_start;
+
+                // Item's bottom edge touches placement's top edge
+                if (y - p_top - self.request.cut_width).abs() < eps {
+                    contact += h_overlap;
+                }
+                // Item's top edge touches placement's bottom edge
+                if (y + height + self.request.cut_width - placement.y).abs() < eps {
+                    contact += h_overlap;
+                }
+            }
+        }
+
+        contact
+    }
+
     /// Enumerates every feasible placement for an item on a specific panel.
+    /// Used by optional item placement.
     fn generate_candidate_placements(
         &self,
         item: &Item,
@@ -168,8 +347,14 @@ impl Optimizer {
 
         for area in unused_areas {
             if item.width <= area.width && item.height <= area.height {
-                let score =
-                    self.score_candidate_position(item.width, item.height, &area, layout, false);
+                let score = self.calculate_placement_score(
+                    area.x,
+                    area.y,
+                    item.width,
+                    item.height,
+                    &area,
+                    layout,
+                );
                 candidates.push((
                     Placement {
                         item_id: item.id.clone(),
@@ -186,8 +371,14 @@ impl Optimizer {
             }
 
             if item.can_rotate && item.height <= area.width && item.width <= area.height {
-                let score =
-                    self.score_candidate_position(item.height, item.width, &area, layout, true);
+                let score = self.calculate_placement_score(
+                    area.x,
+                    area.y,
+                    item.height,
+                    item.width,
+                    &area,
+                    layout,
+                );
                 candidates.push((
                     Placement {
                         item_id: item.id.clone(),
@@ -205,60 +396,6 @@ impl Optimizer {
         }
 
         candidates
-    }
-
-    /// Scores where to place an item in a free area depending on the optimization mode.
-    fn score_candidate_position(
-        &self,
-        width: f64,
-        height: f64,
-        area: &layout::UnusedArea,
-        layout: &PanelLayout,
-        rotated: bool,
-    ) -> f64 {
-        let base_score = if self.request.min_initial_usage {
-            let dist_from_origin = area.y * 1000.0 + area.x;
-            let mut min_dist_to_item = f64::MAX;
-
-            for placement in &layout.placements {
-                let right_edge = placement.x + placement.width;
-                let bottom_edge = placement.y + placement.height;
-
-                if area.y < bottom_edge + 1.0 && area.y + height > placement.y - 1.0 {
-                    let horiz_dist = if area.x >= right_edge {
-                        area.x - right_edge
-                    } else if area.x + width <= placement.x {
-                        placement.x - (area.x + width)
-                    } else {
-                        0.0
-                    };
-                    min_dist_to_item = min_dist_to_item.min(horiz_dist);
-                }
-            }
-
-            let mut score = if min_dist_to_item < f64::MAX {
-                dist_from_origin + min_dist_to_item * 0.1
-            } else {
-                dist_from_origin
-            };
-
-            if rotated && height > width {
-                score += (height - width) * 100.0;
-            }
-
-            score
-        } else {
-            area.y * 10000.0 + area.x
-        };
-
-        if self.request.optimize_for_reusable_remnants {
-            let remnant_width = area.width - width;
-            let remnant_height = area.height - height;
-            let max_remnant_area = remnant_width * remnant_height;
-            base_score - (max_remnant_area * 0.01)
-        } else {
-            base_score
-        }
     }
 
     /// Opens a new panel when the item cannot be placed on existing layouts.

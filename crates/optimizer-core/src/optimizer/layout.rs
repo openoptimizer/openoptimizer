@@ -2,6 +2,7 @@ use super::*;
 use crate::types::UnusedArea as OutputUnusedArea;
 
 /// Internal representation of unused areas during computation.
+/// Uses maxrects-style free rectangle tracking for efficient packing.
 #[derive(Debug, Clone)]
 pub(super) struct UnusedArea {
     pub x: f64,
@@ -10,9 +11,28 @@ pub(super) struct UnusedArea {
     pub height: f64,
 }
 
+impl UnusedArea {
+    /// Returns true if this rectangle fully contains another rectangle.
+    fn contains(&self, other: &UnusedArea, eps: f64) -> bool {
+        other.x >= self.x - eps
+            && other.y >= self.y - eps
+            && other.x + other.width <= self.x + self.width + eps
+            && other.y + other.height <= self.y + self.height + eps
+    }
+
+    /// Returns true if two rectangles overlap.
+    fn overlaps(&self, other: &UnusedArea) -> bool {
+        self.x < other.x + other.width
+            && self.x + self.width > other.x
+            && self.y < other.y + other.height
+            && self.y + self.height > other.y
+    }
+}
+
 impl Optimizer {
     /// Returns every rectangular area that is still free on the panel.
-    /// Used internally for candidate placement generation.
+    /// Uses maxrects algorithm: maintains a set of maximal free rectangles.
+    /// This produces better packing by tracking all possible placement positions.
     pub(super) fn find_unused_areas(&self, layout: &PanelLayout) -> Vec<UnusedArea> {
         let usable_width = layout.width - (layout.trimming * 2.0);
         let usable_height = layout.height - (layout.trimming * 2.0);
@@ -21,75 +41,117 @@ impl Optimizer {
             return Vec::new();
         }
 
-        let mut candidates = vec![UnusedArea {
+        // Start with the full usable area
+        let mut free_rects = vec![UnusedArea {
             x: layout.trimming,
             y: layout.trimming,
             width: usable_width,
             height: usable_height,
         }];
 
+        // For each placed item, split any overlapping free rectangles
         for placement in &layout.placements {
-            let mut new_candidates = Vec::new();
+            let placed_rect = UnusedArea {
+                x: placement.x,
+                y: placement.y,
+                width: placement.width + self.request.cut_width,
+                height: placement.height + self.request.cut_width,
+            };
 
-            for area in candidates {
-                let overlap_x1 = area.x.max(placement.x);
-                let overlap_x2 = (placement.x + placement.width + self.request.cut_width)
-                    .min(area.x + area.width);
-                let overlap_y1 = area.y.max(placement.y);
-                let overlap_y2 = (placement.y + placement.height + self.request.cut_width)
-                    .min(area.y + area.height);
-
-                let overlaps = overlap_x1 < overlap_x2 && overlap_y1 < overlap_y2;
-
-                if !overlaps {
-                    new_candidates.push(area);
-                    continue;
-                }
-
-                if overlap_y1 > area.y {
-                    new_candidates.push(UnusedArea {
-                        x: area.x,
-                        y: area.y,
-                        width: area.width,
-                        height: overlap_y1 - area.y,
-                    });
-                }
-
-                if overlap_y2 < area.y + area.height {
-                    new_candidates.push(UnusedArea {
-                        x: area.x,
-                        y: overlap_y2,
-                        width: area.width,
-                        height: area.y + area.height - overlap_y2,
-                    });
-                }
-
-                if overlap_x1 > area.x && overlap_y2 > overlap_y1 {
-                    new_candidates.push(UnusedArea {
-                        x: area.x,
-                        y: overlap_y1,
-                        width: overlap_x1 - area.x,
-                        height: overlap_y2 - overlap_y1,
-                    });
-                }
-
-                if overlap_x2 < area.x + area.width && overlap_y2 > overlap_y1 {
-                    new_candidates.push(UnusedArea {
-                        x: overlap_x2,
-                        y: overlap_y1,
-                        width: area.x + area.width - overlap_x2,
-                        height: overlap_y2 - overlap_y1,
-                    });
-                }
-            }
-
-            candidates = new_candidates;
+            free_rects = self.split_free_rects_around_placement(free_rects, &placed_rect);
         }
 
-        candidates
+        // Remove rectangles that are too small to be useful
+        free_rects
             .into_iter()
-            .filter(|area| area.width > 0.0 && area.height > 0.0)
+            .filter(|r| r.width > 0.5 && r.height > 0.5)
             .collect()
+    }
+
+    /// Splits free rectangles around a placed item using maxrects algorithm.
+    /// This creates up to 4 new rectangles for each overlapping free rect,
+    /// then removes any rectangles that are fully contained by others.
+    fn split_free_rects_around_placement(
+        &self,
+        free_rects: Vec<UnusedArea>,
+        placed: &UnusedArea,
+    ) -> Vec<UnusedArea> {
+        let mut new_free_rects = Vec::new();
+
+        for rect in free_rects {
+            if !rect.overlaps(placed) {
+                new_free_rects.push(rect);
+                continue;
+            }
+
+            // Generate up to 4 maximal rectangles from the remaining space
+            // Left piece: from rect left edge to placed left edge
+            if placed.x > rect.x {
+                new_free_rects.push(UnusedArea {
+                    x: rect.x,
+                    y: rect.y,
+                    width: placed.x - rect.x,
+                    height: rect.height,
+                });
+            }
+
+            // Right piece: from placed right edge to rect right edge
+            let placed_right = placed.x + placed.width;
+            let rect_right = rect.x + rect.width;
+            if placed_right < rect_right {
+                new_free_rects.push(UnusedArea {
+                    x: placed_right,
+                    y: rect.y,
+                    width: rect_right - placed_right,
+                    height: rect.height,
+                });
+            }
+
+            // Bottom piece: from rect bottom edge to placed bottom edge
+            if placed.y > rect.y {
+                new_free_rects.push(UnusedArea {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: placed.y - rect.y,
+                });
+            }
+
+            // Top piece: from placed top edge to rect top edge
+            let placed_top = placed.y + placed.height;
+            let rect_top = rect.y + rect.height;
+            if placed_top < rect_top {
+                new_free_rects.push(UnusedArea {
+                    x: rect.x,
+                    y: placed_top,
+                    width: rect.width,
+                    height: rect_top - placed_top,
+                });
+            }
+        }
+
+        // Remove rectangles that are fully contained by other rectangles
+        self.prune_contained_rects(new_free_rects)
+    }
+
+    /// Removes rectangles that are fully contained within other rectangles.
+    /// This keeps only the maximal free rectangles.
+    fn prune_contained_rects(&self, rects: Vec<UnusedArea>) -> Vec<UnusedArea> {
+        let eps = 0.5;
+        let mut result = Vec::new();
+
+        for (i, rect) in rects.iter().enumerate() {
+            let is_contained = rects
+                .iter()
+                .enumerate()
+                .any(|(j, other)| i != j && other.contains(rect, eps));
+
+            if !is_contained {
+                result.push(rect.clone());
+            }
+        }
+
+        result
     }
 
     /// Returns simplified rectangular unused areas for output.

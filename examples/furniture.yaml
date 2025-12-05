@@ -37,7 +37,7 @@ items:
     width: 900.0
     height: 1750.0
     quantity: 2
-    can_rotate: false
+    can_rotate: true
     
   # Desk components
   - id: "desktop"
