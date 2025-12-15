@@ -32,7 +32,9 @@ impl Optimizer {
                 let mut reusable_area = 0.0;
 
                 for layout in layouts {
-                    let unused_areas = self.find_unused_areas(layout);
+                    // Use compute_output_unused_areas which returns non-overlapping rectangles
+                    // instead of find_unused_areas which returns overlapping maximal rectangles
+                    let unused_areas = self.compute_output_unused_areas(layout);
                     for area in unused_areas {
                         let area_size = area.width * area.height;
                         if area_size >= min_size {
@@ -40,6 +42,9 @@ impl Optimizer {
                         }
                     }
                 }
+
+                // Clamp reusable_area to not exceed waste_area to avoid negative actual_waste
+                let reusable_area = reusable_area.min(waste_area);
 
                 let actual_waste = waste_area - reusable_area;
                 let actual_waste_pct = if total_area > 0.0 {
