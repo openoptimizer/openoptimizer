@@ -52,11 +52,57 @@ impl Optimizer {
     /// Executes the full optimization flow and returns packed layouts.
     pub fn optimize(&self) -> Result<OptimizationResult> {
         let mut expanded_items = self.expand_items();
-        expanded_items.sort_by(|a, b| {
-            let area_a = a.width * a.height;
-            let area_b = b.width * b.height;
-            area_b.partial_cmp(&area_a).unwrap_or(Ordering::Equal)
-        });
+
+        // Get the panel height for grouping calculation
+        let panel_height = self
+            .request
+            .panel_types
+            .first()
+            .map(|p| p.height - p.trimming * 2.0)
+            .unwrap_or(0.0);
+
+        if self.request.min_initial_usage && panel_height > 0.0 {
+            // For min_initial_usage, try to group items whose heights complement each other
+            // to maximize panel utilization
+            expanded_items.sort_by(|a, b| {
+                // Calculate effective height (max of width/height considering rotation)
+                let h_a = if a.can_rotate {
+                    a.height.max(a.width)
+                } else {
+                    a.height
+                };
+                let h_b = if b.can_rotate {
+                    b.height.max(b.width)
+                } else {
+                    b.height
+                };
+
+                // Sort by height descending, then by width descending for same height
+                match h_b.partial_cmp(&h_a).unwrap_or(Ordering::Equal) {
+                    Ordering::Equal => {
+                        let w_a = if a.can_rotate {
+                            a.width.min(a.height)
+                        } else {
+                            a.width
+                        };
+                        let w_b = if b.can_rotate {
+                            b.width.min(b.height)
+                        } else {
+                            b.width
+                        };
+                        w_b.partial_cmp(&w_a).unwrap_or(Ordering::Equal)
+                    }
+                    other => other,
+                }
+            });
+        } else {
+            // Default: sort by area descending (Best Fit Decreasing)
+            expanded_items.sort_by(|a, b| {
+                let area_a = a.width * a.height;
+                let area_b = b.width * b.height;
+                area_b.partial_cmp(&area_a).unwrap_or(Ordering::Equal)
+            });
+        }
 
         let layouts = self.best_fit_decreasing_optimize(&expanded_items)?;
         let (mut final_layouts, optional_items_used) = self.try_add_optional_items(layouts)?;
@@ -109,13 +155,21 @@ impl Optimizer {
             // Try to place on existing panels using bottom-left-fill strategy
             for (idx, layout) in layouts.iter().enumerate() {
                 if let Some((placement, score)) = self.find_best_placement(item, layout) {
+                    // When min_initial_usage is set, strongly prefer filling earlier panels
+                    let adjusted_score = if self.request.min_initial_usage {
+                        // Add large penalty for using later panels to encourage filling earlier ones
+                        score + (idx as f64) * 1_000_000.0
+                    } else {
+                        score
+                    };
+
                     match best_fit {
                         None => {
-                            best_fit = Some((idx, placement, score));
+                            best_fit = Some((idx, placement, adjusted_score));
                         }
                         Some((_, _, best_score)) => {
-                            if score < best_score {
-                                best_fit = Some((idx, placement, score));
+                            if adjusted_score < best_score {
+                                best_fit = Some((idx, placement, adjusted_score));
                             }
                         }
                     }
@@ -227,14 +281,13 @@ impl Optimizer {
         area: &layout::UnusedArea,
         layout: &PanelLayout,
     ) -> f64 {
-        // Primary: Bottom-left position - items should fill from bottom-left
-        // Heavily weight Y to ensure rows are filled before going up
-        let position_score = y * 10000.0 + x;
-
-        // Secondary: How well does the item fit the free rectangle?
-        // Prefer placements that leave useful remaining space
+        // How well does the item fit the free rectangle?
         let width_leftover = area.width - width - self.request.cut_width;
         let height_leftover = area.height - height - self.request.cut_width;
+
+        // Calculate how tight the fit is (0 = perfect fit, higher = more waste)
+        let fit_ratio = (width_leftover.max(0.0) * height_leftover.max(0.0))
+            / (area.width * area.height).max(1.0);
 
         // Penalty for creating thin slivers that are hard to use
         let sliver_penalty = if width_leftover > 0.0 && width_leftover < 50.0 {
@@ -250,15 +303,42 @@ impl Optimizer {
         // Tertiary: Contact score - prefer placements adjacent to existing pieces
         let contact_score = self.calculate_contact_score(x, y, width, height, layout);
 
-        // Combine scores: position is most important, then contact, then sliver avoidance
         if self.request.min_initial_usage {
-            // Pack tightly from origin
-            position_score - contact_score * 100.0 + sliver_penalty
+            // For min_initial_usage, prioritize:
+            // 1. Tight fit (filling gaps perfectly) - most important
+            // 2. Contact with existing pieces (pack densely)
+            // 3. Bottom-left position within the panel
+            let position_score = y * 100.0 + x * 0.1;
+
+            // Bonus for tight height fit - strongly prefer filling vertical gaps
+            let height_fit_bonus = if height_leftover.abs() < 10.0 {
+                -50000.0 // Perfect height fit gets huge bonus
+            } else if height_leftover > 0.0 && height_leftover < 100.0 {
+                -20000.0 // Good height fit gets good bonus
+            } else {
+                0.0
+            };
+
+            // Bonus for tight width fit
+            let width_fit_bonus = if width_leftover.abs() < 10.0 {
+                -30000.0
+            } else if width_leftover > 0.0 && width_leftover < 100.0 {
+                -10000.0
+            } else {
+                0.0
+            };
+
+            position_score + fit_ratio * 10000.0 - contact_score * 500.0
+                + sliver_penalty
+                + height_fit_bonus
+                + width_fit_bonus
         } else if self.request.optimize_for_reusable_remnants {
             // Prefer leaving large contiguous areas
+            let position_score = y * 10000.0 + x;
             position_score + sliver_penalty * 2.0 - contact_score * 50.0
         } else {
             // Default: bottom-left with contact bonus
+            let position_score = y * 10000.0 + x;
             position_score - contact_score * 200.0 + sliver_penalty
         }
     }
