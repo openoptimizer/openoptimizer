@@ -8,7 +8,8 @@ const MIN_WASTE_THRESHOLD_PERCENT: f64 = 8.0;
 impl Optimizer {
     /// Attempts to insert optional items to reduce waste on already packed panels.
     /// Optional items are only considered when effective waste exceeds 8%.
-    /// Items are tried in descending priority order.
+    /// Items are tried in descending priority order, and multiple copies of the same
+    /// item type can be placed. The algorithm never adds panels for optional items.
     pub(super) fn try_add_optional_items(
         &self,
         layouts: Vec<PanelLayout>,
@@ -35,41 +36,67 @@ impl Optimizer {
             return Ok((layouts, Vec::new()));
         }
 
-        // Sort by priority descending (higher priority first)
-        optional_items_pool.sort_by(|a, b| b.1.priority.cmp(&a.1.priority));
+        // Sort by priority descending (higher priority first), then by area descending
+        optional_items_pool.sort_by(|a, b| {
+            b.1.priority.cmp(&a.1.priority).then_with(|| {
+                let area_a = a.1.width * a.1.height;
+                let area_b = b.1.width * b.1.height;
+                area_b.partial_cmp(&area_a).unwrap_or(Ordering::Equal)
+            })
+        });
 
         let mut best_layouts = layouts.clone();
         let mut best_summary = initial_summary;
         let mut items_used: Vec<String> = Vec::new();
+        let panel_count = best_layouts.len();
 
-        for (panel_type_id, optional_item) in optional_items_pool {
-            let test_item = self.optional_to_item(&optional_item);
-            let mut test_layouts = best_layouts.clone();
-            let mut placed = false;
+        // Keep trying to place optional items until no more can fit
+        let mut made_progress = true;
+        while made_progress {
+            made_progress = false;
 
-            for layout in &mut test_layouts {
-                if layout.panel_type_id == panel_type_id {
-                    if let Some(placement) = self.try_place_item(&test_item, layout) {
-                        layout.placements.push(placement);
-                        placed = true;
-                        break;
+            for (panel_type_id, optional_item) in &optional_items_pool {
+                let test_item = self.optional_to_item(optional_item);
+
+                // Try to place on each layout of matching panel type
+                for layout_idx in 0..best_layouts.len() {
+                    if best_layouts[layout_idx].panel_type_id != *panel_type_id {
+                        continue;
+                    }
+
+                    let mut test_layouts = best_layouts.clone();
+                    if let Some(placement) =
+                        self.try_place_item(&test_item, &test_layouts[layout_idx])
+                    {
+                        test_layouts[layout_idx].placements.push(placement);
+
+                        // Ensure we haven't somehow added a new panel (safety check)
+                        if test_layouts.len() > panel_count {
+                            continue;
+                        }
+
+                        let test_summary = self.calculate_summary(&test_layouts);
+                        let best_waste = best_summary
+                            .actual_waste_area
+                            .unwrap_or(best_summary.waste_area);
+                        let test_waste = test_summary
+                            .actual_waste_area
+                            .unwrap_or(test_summary.waste_area);
+
+                        if test_waste < best_waste {
+                            best_layouts = test_layouts;
+                            best_summary = test_summary;
+                            items_used.push(optional_item.id.clone());
+                            made_progress = true;
+                            // Continue to next iteration of outer while loop
+                            // to re-check all items again (prioritized order)
+                            break;
+                        }
                     }
                 }
-            }
 
-            if placed {
-                let test_summary = self.calculate_summary(&test_layouts);
-                let best_waste = best_summary
-                    .actual_waste_area
-                    .unwrap_or(best_summary.waste_area);
-                let test_waste = test_summary
-                    .actual_waste_area
-                    .unwrap_or(test_summary.waste_area);
-
-                if test_waste < best_waste {
-                    best_layouts = test_layouts;
-                    best_summary = test_summary;
-                    items_used.push(optional_item.id.clone());
+                if made_progress {
+                    break;
                 }
             }
         }
