@@ -96,6 +96,10 @@ panel_types:
 
 Omit the field (or set it to 0) to use the full panel.
 
+Panels may be used in either orientation (width/height swapped) to improve packing. When a panel
+is rotated, the resulting `PanelLayout.width` and `PanelLayout.height` reflect the orientation
+chosen by the optimizer.
+
 ### Unused areas
 
 Each `PanelLayout` in the response includes an `unused_areas` array containing the rectangular

@@ -414,6 +414,43 @@ fn test_trimming_offsets_placements() {
 }
 
 #[test]
+fn test_rotated_panel_allows_item_fit() {
+    let request = OptimizationRequest {
+        cut_width: 2.0,
+        panel_types: vec![PanelType {
+            id: "panel_rot".into(),
+            width: 1000.0,
+            height: 2000.0,
+            trimming: 0.0,
+            optional_items: vec![],
+        }],
+        items: vec![Item {
+            id: "wide_item".into(),
+            width: 1500.0,
+            height: 900.0,
+            quantity: 1,
+            can_rotate: false,
+        }],
+        min_initial_usage: false,
+        min_reusable_remnant_size: None,
+        optimize_for_reusable_remnants: false,
+    };
+
+    let optimizer = Optimizer::new(request).unwrap();
+    let result = optimizer.optimize().unwrap();
+
+    assert_eq!(result.layouts.len(), 1);
+    let layout = &result.layouts[0];
+    assert!((layout.width - 2000.0).abs() < f64::EPSILON);
+    assert!((layout.height - 1000.0).abs() < f64::EPSILON);
+
+    let placement = &layout.placements[0];
+    assert!((placement.width - 1500.0).abs() < f64::EPSILON);
+    assert!((placement.height - 900.0).abs() < f64::EPSILON);
+    assert!(!placement.rotated);
+}
+
+#[test]
 fn test_invalid_trimming_rejected() {
     let request = OptimizationRequest {
         cut_width: 1.0,

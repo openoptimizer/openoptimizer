@@ -178,7 +178,9 @@ impl Optimizer {
 
             if let Some((idx, placement, _)) = best_fit {
                 layouts[idx].placements.push(placement);
-            } else if let Some((panel_type, placement)) = self.place_on_new_panel(item)? {
+            } else if let Some((panel_type, panel_width, panel_height, placement)) =
+                self.place_on_new_panel(item)?
+            {
                 let panel_number = layouts
                     .iter()
                     .filter(|l| l.panel_type_id == panel_type.id)
@@ -188,8 +190,8 @@ impl Optimizer {
                 layouts.push(PanelLayout {
                     panel_type_id: panel_type.id.clone(),
                     panel_number,
-                    width: panel_type.width,
-                    height: panel_type.height,
+                    width: panel_width,
+                    height: panel_height,
                     trimming: panel_type.trimming,
                     placements: vec![placement],
                     unused_areas: Vec::new(), // Populated after optimization completes
@@ -479,40 +481,210 @@ impl Optimizer {
     }
 
     /// Opens a new panel when the item cannot be placed on existing layouts.
-    fn place_on_new_panel(&self, item: &Item) -> Result<Option<(PanelType, Placement)>> {
+    fn place_on_new_panel(
+        &self,
+        item: &Item,
+    ) -> Result<Option<(PanelType, f64, f64, Placement)>> {
+        let mut best_candidate: Option<(PanelType, f64, f64, Placement, f64, u32)> = None;
+
         for panel_type in &self.request.panel_types {
-            let usable_width = panel_type.width - (panel_type.trimming * 2.0);
-            let usable_height = panel_type.height - (panel_type.trimming * 2.0);
+            let orientations = if (panel_type.width - panel_type.height).abs() < f64::EPSILON {
+                vec![(panel_type.width, panel_type.height)]
+            } else {
+                vec![
+                    (panel_type.width, panel_type.height),
+                    (panel_type.height, panel_type.width),
+                ]
+            };
 
-            if item.width <= usable_width && item.height <= usable_height {
-                return Ok(Some((
-                    panel_type.clone(),
-                    Placement {
-                        item_id: item.id.clone(),
-                        x: panel_type.trimming,
-                        y: panel_type.trimming,
-                        width: item.width,
-                        height: item.height,
-                        rotated: false,
-                    },
-                )));
-            }
-
-            if item.can_rotate && item.height <= usable_width && item.width <= usable_height {
-                return Ok(Some((
-                    panel_type.clone(),
-                    Placement {
-                        item_id: item.id.clone(),
-                        x: panel_type.trimming,
-                        y: panel_type.trimming,
-                        width: item.height,
-                        height: item.width,
-                        rotated: true,
-                    },
-                )));
+            for (panel_width, panel_height) in orientations {
+                if let Some((placement, score)) = self.best_new_panel_placement(
+                    item,
+                    panel_type,
+                    panel_width,
+                    panel_height,
+                ) {
+                    let capacity = self.estimate_panel_capacity(
+                        item,
+                        panel_width,
+                        panel_height,
+                        panel_type.trimming,
+                    );
+                    match best_candidate {
+                        None => {
+                            best_candidate = Some((
+                                panel_type.clone(),
+                                panel_width,
+                                panel_height,
+                                placement,
+                                score,
+                                capacity,
+                            ));
+                        }
+                        Some((_, _, _, _, best_score, best_capacity)) => {
+                            if capacity > best_capacity
+                                || (capacity == best_capacity && score < best_score)
+                            {
+                                best_candidate = Some((
+                                    panel_type.clone(),
+                                    panel_width,
+                                    panel_height,
+                                    placement,
+                                    score,
+                                    capacity,
+                                ));
+                            }
+                        }
+                    }
+                }
             }
         }
 
+        if let Some((panel_type, panel_width, panel_height, placement, _, _)) = best_candidate {
+            return Ok(Some((panel_type, panel_width, panel_height, placement)));
+        }
+
         Err(OptimizerError::CannotFitAll)
+    }
+
+    /// Picks the best placement for an item on a fresh panel orientation.
+    fn best_new_panel_placement(
+        &self,
+        item: &Item,
+        panel_type: &PanelType,
+        panel_width: f64,
+        panel_height: f64,
+    ) -> Option<(Placement, f64)> {
+        let usable_width = panel_width - (panel_type.trimming * 2.0);
+        let usable_height = panel_height - (panel_type.trimming * 2.0);
+
+        if usable_width <= 0.0 || usable_height <= 0.0 {
+            return None;
+        }
+
+        let layout = PanelLayout {
+            panel_type_id: panel_type.id.clone(),
+            panel_number: 1,
+            width: panel_width,
+            height: panel_height,
+            trimming: panel_type.trimming,
+            placements: Vec::new(),
+            unused_areas: Vec::new(),
+        };
+
+        let area = layout::UnusedArea {
+            x: panel_type.trimming,
+            y: panel_type.trimming,
+            width: usable_width,
+            height: usable_height,
+        };
+
+        let mut best: Option<(Placement, f64)> = None;
+
+        if item.width <= usable_width && item.height <= usable_height {
+            let score = self.calculate_placement_score(
+                area.x,
+                area.y,
+                item.width,
+                item.height,
+                &area,
+                &layout,
+            );
+            let placement = Placement {
+                item_id: item.id.clone(),
+                x: panel_type.trimming,
+                y: panel_type.trimming,
+                width: item.width,
+                height: item.height,
+                rotated: false,
+            };
+            best = Some((placement, score));
+        }
+
+        if item.can_rotate && item.height <= usable_width && item.width <= usable_height {
+            let score = self.calculate_placement_score(
+                area.x,
+                area.y,
+                item.height,
+                item.width,
+                &area,
+                &layout,
+            );
+            let placement = Placement {
+                item_id: item.id.clone(),
+                x: panel_type.trimming,
+                y: panel_type.trimming,
+                width: item.height,
+                height: item.width,
+                rotated: true,
+            };
+
+            match best {
+                None => best = Some((placement, score)),
+                Some((_, best_score)) if score < best_score => {
+                    best = Some((placement, score));
+                }
+                _ => {}
+            }
+        }
+
+        best
+    }
+
+    /// Estimates how many copies of an item could fit on a fresh panel orientation.
+    fn estimate_panel_capacity(
+        &self,
+        item: &Item,
+        panel_width: f64,
+        panel_height: f64,
+        trimming: f64,
+    ) -> u32 {
+        let usable_width = panel_width - (trimming * 2.0);
+        let usable_height = panel_height - (trimming * 2.0);
+
+        if usable_width <= 0.0 || usable_height <= 0.0 {
+            return 0;
+        }
+
+        let capacity_normal = self.capacity_for_dims(
+            item.width,
+            item.height,
+            usable_width,
+            usable_height,
+        );
+        let capacity_rotated = if item.can_rotate {
+            self.capacity_for_dims(item.height, item.width, usable_width, usable_height)
+        } else {
+            0
+        };
+
+        capacity_normal.max(capacity_rotated)
+    }
+
+    fn capacity_for_dims(
+        &self,
+        item_width: f64,
+        item_height: f64,
+        usable_width: f64,
+        usable_height: f64,
+    ) -> u32 {
+        if item_width <= 0.0
+            || item_height <= 0.0
+            || item_width > usable_width
+            || item_height > usable_height
+        {
+            return 0;
+        }
+
+        let step_w = item_width + self.request.cut_width;
+        let step_h = item_height + self.request.cut_width;
+
+        if step_w <= 0.0 || step_h <= 0.0 {
+            return 0;
+        }
+
+        let cols = ((usable_width + self.request.cut_width) / step_w).floor() as u32;
+        let rows = ((usable_height + self.request.cut_width) / step_h).floor() as u32;
+        cols.saturating_mul(rows)
     }
 }

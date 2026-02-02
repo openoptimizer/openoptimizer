@@ -106,7 +106,7 @@ components:
           description: Kerf (cut) width that should be left between placements.
         panel_types:
           type: array
-          description: Available panel dimensions that can be consumed.
+          description: Available panel dimensions that can be consumed. Panels may be used in either orientation (width/height swapped) to improve packing.
           items:
             $ref: '#/components/schemas/PanelType'
         items:
@@ -249,9 +249,11 @@ components:
         width:
           type: number
           format: double
+          description: Width of the panel in the orientation selected by the optimizer.
         height:
           type: number
           format: double
+          description: Height of the panel in the orientation selected by the optimizer.
         trimming:
           type: number
           format: double
