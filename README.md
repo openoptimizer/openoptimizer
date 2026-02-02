@@ -123,6 +123,10 @@ Example response snippet:
 
 Use these rectangles to visualize waste, plan reusable offcuts, or feed into downstream nesting.
 
+When `min_reusable_remnant_size` is set, the reusable remnant total is computed from a
+non-overlapping selection of these rectangles (largest-first) to avoid double-counting overlapping
+free regions. The `actual_waste_*` fields reflect total waste minus that reusable area.
+
 ### Optional items
 
 Each `PanelType` can include an `optional_items` array of filler pieces that the optimizer will

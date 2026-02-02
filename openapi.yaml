@@ -348,14 +348,17 @@ components:
           type: number
           format: double
           nullable: true
+          description: Area of reusable remnants selected from non-overlapping unused rectangles.
         actual_waste_area:
           type: number
           format: double
           nullable: true
+          description: Waste area after excluding reusable remnants.
         actual_waste_percentage:
           type: number
           format: double
           nullable: true
+          description: Waste percentage after excluding reusable remnants.
     ErrorResponse:
       type: object
       required:

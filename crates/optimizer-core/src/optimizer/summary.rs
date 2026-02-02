@@ -1,4 +1,5 @@
 use super::*;
+use crate::types::UnusedArea as OutputUnusedArea;
 use std::collections::HashMap;
 
 impl Optimizer {
@@ -32,14 +33,31 @@ impl Optimizer {
                 let mut reusable_area = 0.0;
 
                 for layout in layouts {
-                    // Use compute_output_unused_areas which returns non-overlapping rectangles
-                    // instead of find_unused_areas which returns overlapping maximal rectangles
-                    let unused_areas = self.compute_output_unused_areas(layout);
+                    // compute_output_unused_areas can still contain overlaps. Select a
+                    // non-overlapping set (largest first) to avoid double counting.
+                    let mut unused_areas = self.compute_output_unused_areas(layout);
+                    unused_areas.sort_by(|a, b| {
+                        let area_a = a.width * a.height;
+                        let area_b = b.width * b.height;
+                        area_b
+                            .partial_cmp(&area_a)
+                            .unwrap_or(std::cmp::Ordering::Equal)
+                    });
+
+                    let mut accepted: Vec<OutputUnusedArea> = Vec::new();
+
                     for area in unused_areas {
                         let area_size = area.width * area.height;
-                        if area_size >= min_size {
-                            reusable_area += area_size;
+                        if area_size < min_size {
+                            continue;
                         }
+
+                        if accepted.iter().any(|existing| areas_overlap(existing, &area)) {
+                            continue;
+                        }
+
+                        reusable_area += area_size;
+                        accepted.push(area);
                     }
                 }
 
@@ -73,4 +91,12 @@ impl Optimizer {
             actual_waste_percentage,
         }
     }
+}
+
+fn areas_overlap(a: &OutputUnusedArea, b: &OutputUnusedArea) -> bool {
+    let eps = 0.5;
+    a.x < b.x + b.width - eps
+        && a.x + a.width > b.x + eps
+        && a.y < b.y + b.height - eps
+        && a.y + a.height > b.y + eps
 }
