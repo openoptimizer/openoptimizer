@@ -50,61 +50,40 @@ impl Optimizer {
     }
 
     /// Executes the full optimization flow and returns packed layouts.
+    ///
+    /// Runs the BFD heuristic with several sort/rotation strategies, keeps the
+    /// result that uses the fewest panels (ties broken by lowest waste), then
+    /// attempts to consolidate by redistributing items from the least-used
+    /// panel into the remaining ones.
     pub fn optimize(&self) -> Result<OptimizationResult> {
-        let mut expanded_items = self.expand_items();
+        let expanded_items = self.expand_items();
+        let strategies = self.generate_sort_strategies(&expanded_items);
 
-        // Get the panel height for grouping calculation
-        let panel_height = self
-            .request
-            .panel_types
-            .first()
-            .map(|p| p.height - p.trimming * 2.0)
-            .unwrap_or(0.0);
+        let mut best_layouts: Option<Vec<PanelLayout>> = None;
+        let mut best_panel_count = usize::MAX;
+        let mut best_waste = f64::MAX;
 
-        if self.request.min_initial_usage && panel_height > 0.0 {
-            // For min_initial_usage, try to group items whose heights complement each other
-            // to maximize panel utilization
-            expanded_items.sort_by(|a, b| {
-                // Calculate effective height (max of width/height considering rotation)
-                let h_a = if a.can_rotate {
-                    a.height.max(a.width)
-                } else {
-                    a.height
-                };
-                let h_b = if b.can_rotate {
-                    b.height.max(b.width)
-                } else {
-                    b.height
-                };
+        for sorted_items in &strategies {
+            match self.best_fit_decreasing_optimize(sorted_items) {
+                Ok(layouts) => {
+                    let layouts = self.try_reduce_panels(layouts, &expanded_items);
+                    let panel_count = layouts.len();
+                    let summary = self.calculate_summary(&layouts);
+                    let waste = summary.waste_area;
 
-                // Sort by height descending, then by width descending for same height
-                match h_b.partial_cmp(&h_a).unwrap_or(Ordering::Equal) {
-                    Ordering::Equal => {
-                        let w_a = if a.can_rotate {
-                            a.width.min(a.height)
-                        } else {
-                            a.width
-                        };
-                        let w_b = if b.can_rotate {
-                            b.width.min(b.height)
-                        } else {
-                            b.width
-                        };
-                        w_b.partial_cmp(&w_a).unwrap_or(Ordering::Equal)
+                    if panel_count < best_panel_count
+                        || (panel_count == best_panel_count && waste < best_waste)
+                    {
+                        best_layouts = Some(layouts);
+                        best_panel_count = panel_count;
+                        best_waste = waste;
                     }
-                    other => other,
                 }
-            });
-        } else {
-            // Default: sort by area descending (Best Fit Decreasing)
-            expanded_items.sort_by(|a, b| {
-                let area_a = a.width * a.height;
-                let area_b = b.width * b.height;
-                area_b.partial_cmp(&area_a).unwrap_or(Ordering::Equal)
-            });
+                Err(_) => continue,
+            }
         }
 
-        let layouts = self.best_fit_decreasing_optimize(&expanded_items)?;
+        let layouts = best_layouts.ok_or(OptimizerError::CannotFitAll)?;
         let (mut final_layouts, optional_items_used) = self.try_add_optional_items(layouts)?;
 
         // Compute unused areas for each panel in the final output
@@ -142,6 +121,244 @@ impl Optimizer {
             }
         }
         expanded
+    }
+
+    /// Builds several item orderings (and optional dimension pre-normalizations)
+    /// so the BFD heuristic can explore different packing configurations.
+    fn generate_sort_strategies(&self, items: &[Item]) -> Vec<Vec<Item>> {
+        let mut strategies: Vec<Vec<Item>> = Vec::new();
+
+        // Helper: normalize items so height = max dimension (only for rotatable items)
+        let normalize_tall = |items: &[Item]| -> Vec<Item> {
+            items
+                .iter()
+                .map(|item| {
+                    if item.can_rotate && item.width > item.height {
+                        Item {
+                            id: item.id.clone(),
+                            width: item.height,
+                            height: item.width,
+                            quantity: item.quantity,
+                            can_rotate: item.can_rotate,
+                        }
+                    } else {
+                        item.clone()
+                    }
+                })
+                .collect()
+        };
+
+        // Helper: normalize items so width = max dimension (only for rotatable items)
+        let normalize_wide = |items: &[Item]| -> Vec<Item> {
+            items
+                .iter()
+                .map(|item| {
+                    if item.can_rotate && item.height > item.width {
+                        Item {
+                            id: item.id.clone(),
+                            width: item.height,
+                            height: item.width,
+                            quantity: item.quantity,
+                            can_rotate: item.can_rotate,
+                        }
+                    } else {
+                        item.clone()
+                    }
+                })
+                .collect()
+        };
+
+        // Strategy 1: area descending (standard BFD)
+        let mut s = items.to_vec();
+        s.sort_by(|a, b| {
+            let area_a = a.width * a.height;
+            let area_b = b.width * b.height;
+            area_b.partial_cmp(&area_a).unwrap_or(Ordering::Equal)
+        });
+        strategies.push(s);
+
+        // Strategy 2: height descending, then width descending
+        let mut s = items.to_vec();
+        s.sort_by(
+            |a, b| match b.height.partial_cmp(&a.height).unwrap_or(Ordering::Equal) {
+                Ordering::Equal => b.width.partial_cmp(&a.width).unwrap_or(Ordering::Equal),
+                other => other,
+            },
+        );
+        strategies.push(s);
+
+        // Strategy 3: width descending, then height descending
+        let mut s = items.to_vec();
+        s.sort_by(
+            |a, b| match b.width.partial_cmp(&a.width).unwrap_or(Ordering::Equal) {
+                Ordering::Equal => b.height.partial_cmp(&a.height).unwrap_or(Ordering::Equal),
+                other => other,
+            },
+        );
+        strategies.push(s);
+
+        // Strategy 4: normalize tall, sort by max-dim descending then min-dim
+        let mut s = normalize_tall(items);
+        s.sort_by(
+            |a, b| match b.height.partial_cmp(&a.height).unwrap_or(Ordering::Equal) {
+                Ordering::Equal => b.width.partial_cmp(&a.width).unwrap_or(Ordering::Equal),
+                other => other,
+            },
+        );
+        strategies.push(s);
+
+        // Strategy 5: normalize wide, sort by width descending then height
+        let mut s = normalize_wide(items);
+        s.sort_by(
+            |a, b| match b.width.partial_cmp(&a.width).unwrap_or(Ordering::Equal) {
+                Ordering::Equal => b.height.partial_cmp(&a.height).unwrap_or(Ordering::Equal),
+                other => other,
+            },
+        );
+        strategies.push(s);
+
+        // Strategy 6: normalize tall, sort by area descending
+        let mut s = normalize_tall(items);
+        s.sort_by(|a, b| {
+            let area_a = a.width * a.height;
+            let area_b = b.width * b.height;
+            area_b.partial_cmp(&area_a).unwrap_or(Ordering::Equal)
+        });
+        strategies.push(s);
+
+        strategies
+    }
+
+    /// After the initial BFD pass, try to eliminate the least-used panel by
+    /// redistributing its items across the remaining panels. Repeat until
+    /// no more panels can be removed.
+    fn try_reduce_panels(
+        &self,
+        layouts: Vec<PanelLayout>,
+        expanded_items: &[Item],
+    ) -> Vec<PanelLayout> {
+        if layouts.len() <= 1 {
+            return layouts;
+        }
+
+        let mut current = layouts;
+
+        loop {
+            if current.len() <= 1 {
+                break;
+            }
+
+            // Find the panel with the smallest used area (best candidate for removal)
+            let min_idx = current
+                .iter()
+                .enumerate()
+                .min_by(|(_, a), (_, b)| {
+                    let used_a: f64 = a.placements.iter().map(|p| p.width * p.height).sum();
+                    let used_b: f64 = b.placements.iter().map(|p| p.width * p.height).sum();
+                    used_a.partial_cmp(&used_b).unwrap_or(Ordering::Equal)
+                })
+                .map(|(i, _)| i)
+                .unwrap();
+
+            let target_panel = current[min_idx].clone();
+
+            // Reconstruct Item structs from the panel's placements
+            let mut items_to_place: Vec<Item> = target_panel
+                .placements
+                .iter()
+                .map(|p| {
+                    let (orig_w, orig_h) = if p.rotated {
+                        (p.height, p.width)
+                    } else {
+                        (p.width, p.height)
+                    };
+
+                    let can_rotate = expanded_items
+                        .iter()
+                        .find(|i| i.id == p.item_id)
+                        .map(|i| i.can_rotate)
+                        .unwrap_or(true);
+
+                    Item {
+                        id: p.item_id.clone(),
+                        width: orig_w,
+                        height: orig_h,
+                        quantity: 1,
+                        can_rotate,
+                    }
+                })
+                .collect();
+
+            // Place largest items first for best fit
+            items_to_place.sort_by(|a, b| {
+                let area_a = a.width * a.height;
+                let area_b = b.width * b.height;
+                area_b.partial_cmp(&area_a).unwrap_or(Ordering::Equal)
+            });
+
+            // Remove the target panel and try to redistribute its items
+            let mut test = current.clone();
+            test.remove(min_idx);
+
+            let mut all_placed = true;
+            for item in &items_to_place {
+                let mut best_fit: Option<(usize, Placement, f64)> = None;
+
+                for (idx, layout) in test.iter().enumerate() {
+                    if let Some((placement, score)) = self.find_best_placement(item, layout) {
+                        let adjusted_score = if self.request.min_initial_usage {
+                            score + (idx as f64) * 1_000_000.0
+                        } else {
+                            score
+                        };
+
+                        match best_fit {
+                            None => best_fit = Some((idx, placement, adjusted_score)),
+                            Some((_, _, best_score)) if adjusted_score < best_score => {
+                                best_fit = Some((idx, placement, adjusted_score));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+
+                if let Some((idx, placement, _)) = best_fit {
+                    test[idx].placements.push(placement);
+                } else {
+                    all_placed = false;
+                    break;
+                }
+            }
+
+            if all_placed {
+                current = test;
+                // Continue and try to eliminate another panel
+            } else {
+                break;
+            }
+        }
+
+        // Renumber panels per panel type
+        self.renumber_panels(&mut current);
+        current
+    }
+
+    /// Reassigns sequential panel_number values per panel_type_id.
+    fn renumber_panels(&self, layouts: &mut [PanelLayout]) {
+        let mut type_counts: Vec<(String, u32)> = Vec::new();
+        for layout in layouts.iter_mut() {
+            let num = if let Some((_, count)) = type_counts
+                .iter_mut()
+                .find(|(id, _)| *id == layout.panel_type_id)
+            {
+                *count += 1;
+                *count
+            } else {
+                type_counts.push((layout.panel_type_id.clone(), 1));
+                1
+            };
+            layout.panel_number = num;
+        }
     }
 
     /// Places items using best-fit decreasing with bottom-left placement strategy.
@@ -481,10 +698,7 @@ impl Optimizer {
     }
 
     /// Opens a new panel when the item cannot be placed on existing layouts.
-    fn place_on_new_panel(
-        &self,
-        item: &Item,
-    ) -> Result<Option<(PanelType, f64, f64, Placement)>> {
+    fn place_on_new_panel(&self, item: &Item) -> Result<Option<(PanelType, f64, f64, Placement)>> {
         let mut best_candidate: Option<(PanelType, f64, f64, Placement, f64, u32)> = None;
 
         for panel_type in &self.request.panel_types {
@@ -498,12 +712,9 @@ impl Optimizer {
             };
 
             for (panel_width, panel_height) in orientations {
-                if let Some((placement, score)) = self.best_new_panel_placement(
-                    item,
-                    panel_type,
-                    panel_width,
-                    panel_height,
-                ) {
+                if let Some((placement, score)) =
+                    self.best_new_panel_placement(item, panel_type, panel_width, panel_height)
+                {
                     let capacity = self.estimate_panel_capacity(
                         item,
                         panel_width,
@@ -646,12 +857,8 @@ impl Optimizer {
             return 0;
         }
 
-        let capacity_normal = self.capacity_for_dims(
-            item.width,
-            item.height,
-            usable_width,
-            usable_height,
-        );
+        let capacity_normal =
+            self.capacity_for_dims(item.width, item.height, usable_width, usable_height);
         let capacity_rotated = if item.can_rotate {
             self.capacity_for_dims(item.height, item.width, usable_width, usable_height)
         } else {

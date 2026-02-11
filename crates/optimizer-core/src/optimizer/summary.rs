@@ -52,7 +52,10 @@ impl Optimizer {
                             continue;
                         }
 
-                        if accepted.iter().any(|existing| areas_overlap(existing, &area)) {
+                        if accepted
+                            .iter()
+                            .any(|existing| areas_overlap(existing, &area))
+                        {
                             continue;
                         }
 
