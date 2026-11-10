@@ -102,22 +102,32 @@ fn optimize_command(input: PathBuf, output: Option<PathBuf>) -> Result<()> {
             .bold()
     );
     println!(
-        "  Total waste: {:.1}%",
-        result.summary.waste_percentage.to_string().bright_white()
+        "  Total waste: {}%",
+        format!("{:.1}", result.summary.waste_percentage).bright_white()
     );
 
     // Display reusable remnants if available
     if let Some(reusable_area) = result.summary.reusable_remnant_area {
         println!(
-            "  Reusable remnants: {:.0} sq units",
-            reusable_area.to_string().bright_white()
+            "  Reusable remnants: {} sq units",
+            format!("{:.0}", reusable_area).bright_white()
         );
     }
 
     if let Some(actual_waste_pct) = result.summary.actual_waste_percentage {
         println!(
-            "  Actual waste (excluding reusable): {:.1}%",
-            actual_waste_pct.to_string().bright_green()
+            "  Actual waste (excluding reusable): {}%",
+            format!("{:.1}", actual_waste_pct).bright_green()
+        );
+    }
+
+    if let Some(stats) = &result.statistics {
+        println!(
+            "  Search: {} iterations in {} ms, guillotine cuts: {}, max stage: {}",
+            stats.iterations,
+            stats.elapsed_ms,
+            if stats.guillotine { "yes" } else { "no" },
+            stats.max_stage
         );
     }
 

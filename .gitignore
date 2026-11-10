@@ -2,3 +2,4 @@ opcut-master/
 # Rust build artifacts
 target/
 Cargo.lock
+tmp/

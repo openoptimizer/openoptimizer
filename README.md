@@ -4,11 +4,14 @@
   <img src="assets/banner.png" alt="OpenOptimizer Banner" width="600">
 </p>
 
-Rust-based cutting optimizer that packs rectangular parts on sheet goods using a best-fit decreasing heuristic. It exposes a reusable core library, an Axum HTTP API (with a lightweight web UI), and a CLI for batch processing.
+Rust-based cutting optimizer that packs rectangular parts on sheet goods with guillotine cuts (straight through-cuts as on a panel saw). It exposes a reusable core library, an Axum HTTP API (with a lightweight web UI), and a CLI for batch processing.
 
 ## Highlights
 
-- ✅ **Single, predictable heuristic** – always uses Best Fit Decreasing with optional knobs for shelf-first or remnant-friendly packing.
+- 🪚 **Saw-ready plans** – every layout can be cut with straight through-cuts; the response lists the cuts per stage.
+- 📏 **Exact kerf** – every pair of parts is separated by the full kerf on every side (computed in 0.01 units, no rounding drift).
+- 🧮 **Automatic format choice** – panels are filled one after another; for every panel all formats and packing methods (strip/knapsack packing in both directions, free-rectangle best fit) are compared, then improvement moves empty weak panels into offcuts and move panels to smaller formats.
+- 🔁 **Deterministic search** – a multi-start search varies the tuning and keeps the plan with the least panel area, then the fewest panels; identical requests give identical results.
 - 📦 **Three curated examples** – `examples/simple.yaml`, `examples/complex.json`, and `examples/furniture.yaml` cover the most common workloads.
 - 🌐 **Documented API** – OpenAPI spec lives in `openapi.yaml`; served endpoints power the demo UI and any custom integrations.
 - 🧩 **Composable crates** – `optimizer-core`, `optimizer-api`, and `optimizer-cli` share the same logic for cross-validation.
@@ -96,16 +99,34 @@ panel_types:
 
 Omit the field (or set it to 0) to use the full panel.
 
-Panels may be used in either orientation (width/height swapped) to improve packing. When a panel
-is rotated, the resulting `PanelLayout.width` and `PanelLayout.height` reflect the orientation
-chosen by the optimizer.
+Layouts keep the panel orientation of the `panel_type`; cuts are planned in both directions.
+Items with `can_rotate: false` therefore always keep their orientation relative to the panel
+(grain direction).
+
+### Kerf and cuts
+
+`cut_width` is the saw kerf. Parts are kept at least one kerf apart on every side. Each
+`PanelLayout` lists its `cuts` (guillotine cut tree, trimming cuts excluded):
+
+```json
+{ "stage": 1, "direction": "vertical", "x": 1849.0, "y": 15.0, "length": 1824.0 }
+```
+
+`stage` 1 cuts run through the whole trimmed panel, stage 2 cuts through a stage-1 strip, and so
+on. `x`/`y` mark the start of the kerf.
+
+### Search time
+
+The first complete plan is always computed; further search rounds stop after `time_limit_ms`
+(default 3000, maximum 30000). `statistics` in the response reports iterations, runtime, the
+highest cut stage and a lower bound for the panel area (a plan whose `total_area` equals
+the bound is optimal; the search stops early then).
 
 ### Unused areas
 
-Each `PanelLayout` in the response includes an `unused_areas` array containing the rectangular
-leftover regions on that panel after all placements. These areas are guaranteed to be rectangles
-(4 edges); when the free space forms an irregular shape, the optimizer splits it and keeps the
-rectangle with the largest area (square meters).
+Each `PanelLayout` in the response includes an `unused_areas` array containing the offcuts of the
+cutting plan, largest first. They do not overlap and each can be cut out with the listed cuts.
+Offcuts smaller than 10 in either direction are omitted.
 
 Example response snippet:
 
@@ -123,9 +144,8 @@ Example response snippet:
 
 Use these rectangles to visualize waste, plan reusable offcuts, or feed into downstream nesting.
 
-When `min_reusable_remnant_size` is set, the reusable remnant total is computed from a
-non-overlapping selection of these rectangles (largest-first) to avoid double-counting overlapping
-free regions. The `actual_waste_*` fields reflect total waste minus that reusable area.
+When `min_reusable_remnant_size` is set, every offcut with at least that area counts as reusable
+remnant. The `actual_waste_*` fields reflect total waste minus that reusable area.
 
 ### Optional items
 
@@ -137,6 +157,8 @@ Optional items differ from regular items:
 - They have no `quantity` – each entry represents a single piece.
 - They include a `priority` field (higher values are tried first).
 - They are only considered after all required items are placed and waste is above the threshold.
+- They are placed into the offcuts of the finished plan, never on additional panels, and keep the
+  plan guillotine-cuttable. An optional item may be placed several times.
 
 ```yaml
 panel_types:
@@ -181,6 +203,7 @@ Feel free to copy one of these files as a base for your own requests.
 1. Format code with `cargo fmt`.
 2. Run tests via `cargo test -p optimizer-core` (and `cargo test` for a full sweep when changing shared types).
 3. If API behavior changes, rebuild the Docker image and smoke-test the `/api/optimize` endpoint.
-4. Keep documentation (`README.md`, `openapi.yaml`, `COPILOT.md`) in sync with any schema or workflow updates.
+4. Keep documentation (`README.md`, `openapi.yaml`, `.github/copilot-instructions.md`) in sync with any schema or workflow updates.
+5. For algorithm changes compare total panel area, panel count, kerf/overlap validity and guillotine cuttability on a fixed set of real requests before and after the change.
 
-More contributor guidance lives in `COPILOT.md`.
+More contributor guidance lives in `.github/copilot-instructions.md`.
