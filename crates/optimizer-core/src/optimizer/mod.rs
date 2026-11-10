@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 mod bounds;
+mod colgen;
 mod guillotine;
+mod knapsack;
+mod lp;
 mod model;
 mod optional;
 mod packer;
@@ -15,10 +18,12 @@ mod tests;
 use model::*;
 
 /// Version of the packing engine reported in the result statistics.
-pub const ALGORITHM: &str = "guillotine-search-1";
+pub const ALGORITHM: &str = "guillotine-cg-1";
 const DEFAULT_TIME_LIMIT_MS: u64 = 3000;
 const MAX_TIME_LIMIT_MS: u64 = 30000;
 const MAX_ITERATIONS: usize = 48;
+const MAX_LNS_STEPS: usize = 2000;
+const LARGE_REQUEST_PIECES: usize = 150;
 
 /// Packs rectangular items on panels with guillotine (panel saw) cuts.
 ///
@@ -152,17 +157,102 @@ impl Optimizer {
             .time_limit_ms
             .unwrap_or(DEFAULT_TIME_LIMIT_MS)
             .min(MAX_TIME_LIMIT_MS);
-        let lower_bound_area = bounds::lower_bound_area(&pieces, &specs);
+        let limit = Duration::from_millis(time_limit);
         let problem = search::Problem {
             pieces: &pieces,
             kinds,
             specs: &specs,
         };
+
+        // 1. Multi-start construction and improvement search. Large requests keep most of the
+        //    time here because a single LP dive over hundreds of pieces is slow.
+        let search_share = if pieces.len() > LARGE_REQUEST_PIECES {
+            0.85
+        } else {
+            0.4
+        };
+        let simple_bound =
+            bounds::round_up_to_panels(bounds::lower_bound_area(&pieces, &specs), &specs);
         let outcome = problem.search(&search::SearchOptions {
             max_iterations: MAX_ITERATIONS,
-            deadline: started + Duration::from_millis(time_limit),
-            lower_bound_area,
+            deadline: started + limit.mul_f64(search_share),
+            lower_bound_area: simple_bound,
         });
+        let mut bins = outcome.bins;
+        let mut iterations = outcome.iterations;
+        let mut strategy = "search";
+        let incumbent = search::Score::of(&bins).area;
+
+        // 2. Column generation at the root: proven lower bound and a pool of good patterns.
+        //    It stops as soon as the bound proves the search result optimal.
+        let mut columns = colgen::ColumnGeneration::new(&problem);
+        let lower_bound_area = if incumbent <= simple_bound + 1.0 {
+            simple_bound
+        } else {
+            let lp_bound = columns.root(started + limit.mul_f64(search_share + 0.15), |bound| {
+                bounds::round_up_to_panels(bound, &specs) >= incumbent - 1.0
+            });
+            bounds::round_up_to_panels(simple_bound.max(lp_bound), &specs)
+        };
+
+        // 3. Large neighbourhood search through the pattern LP: a full dive first, then a few
+        //    weak panels at a time are dissolved and their pieces re-packed by diving.
+        if search::Score::of(&bins).area > lower_bound_area + 1.0 {
+            columns.add_bins(&bins);
+            let deadline = started + limit;
+            let params = problem.deterministic_params();
+            let mut rng = Rng::new(97);
+            for step in 0..MAX_LNS_STEPS {
+                if Instant::now() >= deadline {
+                    break;
+                }
+                // Later steps may use at most a third of the remaining time.
+                let now = Instant::now();
+                let step_deadline = now + deadline.saturating_duration_since(now) / 3;
+                let candidate = if step == 0 {
+                    columns.dive_all(&mut rng, 0.0, deadline)
+                } else {
+                    let k = (2 + rng.below(3)).min(bins.len());
+                    let mut order: Vec<(f64, usize)> = bins
+                        .iter()
+                        .enumerate()
+                        .map(|(i, b)| (b.efficiency() * (1.0 + 0.6 * rng.unit()), i))
+                        .collect();
+                    order
+                        .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+                    let chosen: Vec<usize> = order.iter().take(k).map(|o| o.1).collect();
+                    let victims: Vec<PackedBin> = chosen.iter().map(|&i| bins[i].clone()).collect();
+                    columns
+                        .repack(&victims, step % 2 == 0, &mut rng, 0.5, step_deadline)
+                        .map(|fresh| {
+                            let mut plan: Vec<PackedBin> = bins
+                                .iter()
+                                .enumerate()
+                                .filter(|(i, _)| !chosen.contains(i))
+                                .map(|(_, b)| b.clone())
+                                .collect();
+                            plan.extend(fresh);
+                            plan
+                        })
+                };
+                let Some(mut candidate) = candidate else {
+                    continue;
+                };
+                iterations += 1;
+                problem.improve(&mut candidate, &params);
+                let score = search::Score::of(&candidate);
+                if score.better_than(&search::Score::of(&bins)) {
+                    search::sort_fullest_first(&mut candidate);
+                    bins = candidate;
+                    strategy = "column-generation";
+                    columns.add_bins(&bins);
+                }
+                if score.area <= lower_bound_area + 1.0 {
+                    break;
+                }
+            }
+        }
+        let outcome = search::SearchOutcome { bins, iterations };
         if outcome.bins.iter().map(|b| b.placed.len()).sum::<usize>() != pieces.len() {
             return Err(OptimizerError::CannotFitAll);
         }
@@ -196,6 +286,7 @@ impl Optimizer {
                 guillotine: built.guillotine,
                 max_stage: built.max_stage,
                 lower_bound_area,
+                strategy: strategy.to_string(),
             }),
         })
     }

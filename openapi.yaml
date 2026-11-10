@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpenOptimizer API
-  version: 0.1.0
+  version: 0.2.0
   description: |
     REST interface for the OpenOptimizer cutting layout engine.
     The optimizer accepts a batch of rectangular parts, available panel types,
@@ -254,7 +254,7 @@ components:
       properties:
         algorithm:
           type: string
-          example: guillotine-search-1
+          example: guillotine-cg-1
         iterations:
           type: integer
           description: Number of search iterations that were run.
@@ -269,7 +269,11 @@ components:
         lower_bound_area:
           type: number
           format: double
-          description: No plan can use less panel area than this. A plan whose total_area equals the bound is optimal.
+          description: No guillotine cutting plan can use less panel area than this (column generation bound, rounded up to whole panels). A plan whose total_area equals the bound is provably optimal.
+        strategy:
+          type: string
+          enum: [search, column-generation]
+          description: Engine part that produced the plan.
     PanelLayout:
       type: object
       required:
