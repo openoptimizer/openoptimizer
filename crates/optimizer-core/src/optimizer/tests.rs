@@ -343,3 +343,47 @@ fn lower_bound_proves_plans_where_large_parts_need_their_own_panel() {
     assert!((bound - 4.0 * 1854.0 * 2800.0).abs() < 1.0);
     assert!((result.summary.total_area - bound).abs() < 1.0);
 }
+
+#[test]
+fn column_generation_bound_proves_rows_of_tall_parts_need_three_panels() {
+    // Real saw lot: parts of ~1810 mm height allow only two rows per 4100 mm panel and their
+    // widths need five rows. Area alone would allow two panels; the pattern LP proves three.
+    let widths = [
+        330.0, 616.0, 616.0, 616.0, 616.0, 422.0, 422.0, 422.0, 80.0, 1190.0, 1190.0, 1190.0,
+    ];
+    let mut items: Vec<Item> = widths
+        .iter()
+        .enumerate()
+        .map(|(i, &w)| item(&format!("p{i}"), w, 1813.0, 1, true))
+        .collect();
+    items.push(item("a", 1206.5, 389.5, 1, true));
+    items.push(item("b", 1033.5, 389.5, 1, true));
+    items.push(item("c", 250.0, 70.0, 1, true));
+    let req = request(0.3, vec![panel("P", 1854.0, 4100.0, 15.0)], items);
+    let result = run(req.clone());
+    assert_valid(&req, &result);
+    assert_eq!(result.summary.total_panels, 3);
+    let stats = result.statistics.unwrap();
+    assert!(
+        (stats.lower_bound_area - 3.0 * 1854.0 * 4100.0).abs() < 1.0,
+        "bound {}",
+        stats.lower_bound_area
+    );
+}
+
+#[test]
+fn reports_the_strategy_that_produced_the_plan() {
+    let req = request(
+        4.0,
+        vec![panel("P", 1854.0, 4100.0, 15.0)],
+        vec![
+            item("door", 606.0, 1985.0, 5, true),
+            item("wall", 1180.0, 1948.0, 3, true),
+        ],
+    );
+    let result = run(req.clone());
+    assert_valid(&req, &result);
+    let stats = result.statistics.unwrap();
+    assert_eq!(stats.algorithm, ALGORITHM);
+    assert!(["search", "column-generation"].contains(&stats.strategy.as_str()));
+}

@@ -12,6 +12,8 @@ Rust-based cutting optimizer that packs rectangular parts on sheet goods with gu
 - 📏 **Exact kerf** – every pair of parts is separated by the full kerf on every side (computed in 0.01 units, no rounding drift).
 - 🧮 **Automatic format choice** – panels are filled one after another; for every panel all formats and packing methods (strip/knapsack packing in both directions, free-rectangle best fit) are compared, then improvement moves empty weak panels into offcuts and move panels to smaller formats.
 - 🔁 **Deterministic search** – a multi-start search varies the tuning and keeps the plan with the least panel area, then the fewest panels; identical requests give identical results.
+- 📊 **Column generation** – a pattern LP (Gilmore–Gomory) prices every part; new panel patterns combine hard-to-place parts with suitable fillers, also when every size occurs only once. Diving and a large neighbourhood search re-pack weak panels through this LP.
+- ✅ **Proven quality** – an exact guillotine knapsack bound turns the LP into a lower bound for the panel area, so the response states whether a plan is provably optimal and how far it can at most be from the optimum.
 - 📦 **Three curated examples** – `examples/simple.yaml`, `examples/complex.json`, and `examples/furniture.yaml` cover the most common workloads.
 - 🌐 **Documented API** – OpenAPI spec lives in `openapi.yaml`; served endpoints power the demo UI and any custom integrations.
 - 🧩 **Composable crates** – `optimizer-core`, `optimizer-api`, and `optimizer-cli` share the same logic for cross-validation.
@@ -117,10 +119,16 @@ on. `x`/`y` mark the start of the kerf.
 
 ### Search time
 
-The first complete plan is always computed; further search rounds stop after `time_limit_ms`
-(default 3000, maximum 30000). `statistics` in the response reports iterations, runtime, the
-highest cut stage and a lower bound for the panel area (a plan whose `total_area` equals
-the bound is optimal; the search stops early then).
+The first complete plan is always computed; further work stops after `time_limit_ms`
+(default 3000, maximum 30000). The time is used in three phases: the construction and
+improvement search (up to 40 %), the root column generation that proves the lower bound (up to
+60 %) and a large neighbourhood search that re-packs weak panels through the pattern LP. Every
+phase stops as soon as the plan reaches the lower bound.
+
+`statistics` in the response reports iterations, runtime, the highest cut stage, the lower bound
+for the panel area (no guillotine cutting plan can use less material; a plan whose `total_area`
+equals the bound is provably optimal) and the `strategy` that produced the plan (`search` or
+`column-generation`).
 
 ### Unused areas
 

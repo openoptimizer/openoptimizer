@@ -92,8 +92,13 @@ pub struct Statistics {
     pub guillotine: bool,
     /// Highest cut stage used in any layout.
     pub max_stage: u32,
-    /// Lower bound for the panel area (mm²): no plan can use less material.
+    /// Lower bound for the panel area (mm²): no guillotine cutting plan can use less material.
+    /// A plan whose total panel area equals this bound is proven optimal.
     pub lower_bound_area: f64,
+    /// Which part of the engine produced the plan: `search` (construction and improvement
+    /// search) or `column-generation` (pattern LP with diving).
+    #[serde(default)]
+    pub strategy: String,
 }
 
 /// Placement of an item on a panel

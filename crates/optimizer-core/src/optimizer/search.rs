@@ -98,13 +98,12 @@ impl<'a> Problem<'a> {
             }
         }
         let (_, mut bins) = best.expect("at least one iteration runs");
-        // Fullest panels first, so the remnant ends up on the last panel.
-        bins.sort_by(|a, b| {
-            b.efficiency()
-                .partial_cmp(&a.efficiency())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        sort_fullest_first(&mut bins);
         SearchOutcome { bins, iterations }
+    }
+
+    pub(super) fn deterministic_params(&self) -> PackParams {
+        self.params_for(true, &mut Rng::new(1))
     }
 
     fn params_for(&self, deterministic: bool, rng: &mut Rng) -> PackParams {
@@ -188,7 +187,7 @@ impl<'a> Problem<'a> {
 
     /// Improvement moves: empty weak panels into the offcuts of the others, re-pack pairs of weak
     /// panels together and move panels to smaller formats.
-    fn improve(&self, bins: &mut Vec<PackedBin>, params: &PackParams) {
+    pub(super) fn improve(&self, bins: &mut Vec<PackedBin>, params: &PackParams) {
         loop {
             let mut changed = self.eliminate_weakest(bins, params);
             changed |= self.repack_weak_pair(bins, params);
@@ -317,4 +316,13 @@ impl<'a> Problem<'a> {
         }
         changed
     }
+}
+
+/// Fullest panels first, so the remnant ends up on the last panel.
+pub fn sort_fullest_first(bins: &mut [PackedBin]) {
+    bins.sort_by(|a, b| {
+        b.efficiency()
+            .partial_cmp(&a.efficiency())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 }

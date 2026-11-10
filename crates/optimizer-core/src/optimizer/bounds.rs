@@ -64,3 +64,48 @@ fn large_pieces(pieces: &[Piece], specs: &[BinSpec]) -> f64 {
         })
         .sum()
 }
+
+/// Smallest total area of whole panels that is at least `bound`: every plan consists of whole
+/// panels, so a fractional bound can be rounded up to the next achievable combination.
+pub fn round_up_to_panels(bound: f64, specs: &[BinSpec]) -> f64 {
+    let mut areas: Vec<f64> = specs.iter().map(|s| s.panel_area).collect();
+    areas.sort_by(|a, b| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal));
+    areas.dedup_by(|a, b| (*a - *b).abs() < 1e-6);
+    // Tolerance for floating point noise in the LP bound.
+    let target = bound * (1.0 - 1e-7) - 1.0;
+    if target <= 0.0 || areas.is_empty() {
+        return bound.max(0.0);
+    }
+    let mut best = f64::INFINITY;
+    let mut budget: u32 = 200_000;
+    cover(&areas, 0, target, 0.0, &mut best, &mut budget);
+    if budget == 0 || !best.is_finite() {
+        bound
+    } else {
+        best.max(bound)
+    }
+}
+
+fn cover(areas: &[f64], i: usize, target: f64, sum: f64, best: &mut f64, budget: &mut u32) {
+    if *budget == 0 {
+        return;
+    }
+    *budget -= 1;
+    if sum >= target {
+        *best = best.min(sum);
+        return;
+    }
+    let area = areas[i];
+    let needed = ((target - sum) / area).ceil().max(0.0) as u64;
+    if i + 1 == areas.len() {
+        *best = best.min(sum + needed as f64 * area);
+        return;
+    }
+    for count in (0..=needed).rev() {
+        let next = sum + count as f64 * area;
+        if next >= *best {
+            continue;
+        }
+        cover(areas, i + 1, target, next, best, budget);
+    }
+}
