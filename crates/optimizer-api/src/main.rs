@@ -194,6 +194,19 @@ fn generate_svg_content(result: &OptimizationResult) -> Result<String, AppError>
             }
         }
 
+        // Draw guillotine saw cuts (thicker lines for earlier stages)
+        for cut in &layout.cuts {
+            let (x1, y1, x2, y2) = match cut.direction {
+                optimizer_core::CutDirection::Vertical => (cut.x, cut.y, cut.x, cut.y + cut.length),
+                optimizer_core::CutDirection::Horizontal => {
+                    (cut.x, cut.y, cut.x + cut.length, cut.y)
+                }
+            };
+            let stroke = (2.4 - 0.5 * cut.stage as f64).max(0.6);
+            writeln!(&mut svg, r##"  <line x1="{}" y1="{}" x2="{}" y2="{}" stroke="#1d4ed8" stroke-width="{}" opacity="0.75"><title>Stage {}</title></line>"##,
+                     x + x1 / scale, y_offset + y1 / scale, x + x2 / scale, y_offset + y2 / scale, stroke, cut.stage).unwrap();
+        }
+
         y_offset += panel_height + panel_spacing;
     }
 
@@ -223,12 +236,28 @@ fn generate_svg_content(result: &OptimizationResult) -> Result<String, AppError>
         margin + 116.0, legend_y + 10.0
     )
     .unwrap();
+    writeln!(
+        &mut svg,
+        r##"  <line x1="{}" y1="{}" x2="{}" y2="{}" stroke="#1d4ed8" stroke-width="2"/>"##,
+        margin + 200.0,
+        legend_y + 6.0,
+        margin + 212.0,
+        legend_y + 6.0
+    )
+    .unwrap();
+    writeln!(
+        &mut svg,
+        r##"  <text x="{}" y="{}" font-family="Arial" font-size="11" fill="#333">Cuts</text>"##,
+        margin + 216.0,
+        legend_y + 10.0
+    )
+    .unwrap();
 
     // Summary
     writeln!(
         &mut svg,
         r##"  <text x="{}" y="{}" font-family="Arial" font-size="12" fill="#666">"##,
-        margin + 250.0,
+        margin + 270.0,
         legend_y + 10.0
     )
     .unwrap();

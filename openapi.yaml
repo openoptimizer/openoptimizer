@@ -1,11 +1,14 @@
 openapi: 3.1.0
 info:
   title: OpenOptimizer API
-  version: 1.0.0
+  version: 0.1.0
   description: |
     REST interface for the OpenOptimizer cutting layout engine.
     The optimizer accepts a batch of rectangular parts, available panel types,
-    and optional packing preferences, and replies with detailed cutting layouts.
+    and optional packing preferences, and replies with guillotine cutting layouts
+    (straight through-cuts as required by panel saws), the saw cuts and the offcuts.
+    All lengths use the same unit (normally millimetres) and are handled with a
+    precision of 0.01.
 servers:
   - url: http://localhost:3000
     description: Local development server
@@ -34,7 +37,13 @@ paths:
   /api/optimize:
     post:
       summary: Optimize cutting plan
-      description: Runs the best-fit decreasing optimizer for the provided request.
+      description: |
+        Fills one panel after another. For every panel all panel types and several
+        guillotine packing methods are evaluated and the most efficient panel is kept,
+        so the panel formats are selected automatically. Improvement moves and a
+        deterministic multi-start search minimise the total panel area (then the
+        number of panels). Identical requests return identical results unless the
+        time limit stops the search early.
       requestBody:
         required: true
         content:
@@ -103,10 +112,10 @@ components:
           type: number
           format: double
           minimum: 0
-          description: Kerf (cut) width that should be left between placements.
+          description: Kerf (saw blade) width. Every pair of placements is separated by at least this distance on every side.
         panel_types:
           type: array
-          description: Available panel dimensions that can be consumed. Panels may be used in either orientation (width/height swapped) to improve packing.
+          description: Available panel formats (unlimited stock). Layouts keep the panel orientation given here; cuts are planned in both directions. The cheapest combination of formats is selected automatically.
           items:
             $ref: '#/components/schemas/PanelType'
         items:
@@ -116,7 +125,7 @@ components:
             $ref: '#/components/schemas/Item'
         min_initial_usage:
           type: boolean
-          description: Prioritize filling panels completely before opening new ones.
+          description: Accepted for compatibility. Panels are always filled completely before a new one is opened.
           default: false
         min_reusable_remnant_size:
           type: number
@@ -125,8 +134,14 @@ components:
           description: Minimum remnant area considered reusable (excluded from waste).
         optimize_for_reusable_remnants:
           type: boolean
-          description: Prefer placements that leave large reusable remnants.
+          description: Accepted for compatibility. Waste is always concentrated on as few panels as possible, the fullest panels come first.
           default: false
+        time_limit_ms:
+          type: integer
+          minimum: 0
+          maximum: 30000
+          default: 3000
+          description: Upper bound for the search time. The first complete solution is always computed.
     PanelType:
       type: object
       required:
@@ -232,6 +247,29 @@ components:
           items:
             type: string
           description: List of optional item identifiers that were placed.
+        statistics:
+          $ref: '#/components/schemas/Statistics'
+    Statistics:
+      type: object
+      properties:
+        algorithm:
+          type: string
+          example: guillotine-search-1
+        iterations:
+          type: integer
+          description: Number of search iterations that were run.
+        elapsed_ms:
+          type: integer
+        guillotine:
+          type: boolean
+          description: True when every layout can be cut with straight through-cuts.
+        max_stage:
+          type: integer
+          description: Highest cut stage used (1 = cuts through the whole trimmed panel).
+        lower_bound_area:
+          type: number
+          format: double
+          description: No plan can use less panel area than this. A plan whose total_area equals the bound is optimal.
     PanelLayout:
       type: object
       required:
@@ -249,11 +287,11 @@ components:
         width:
           type: number
           format: double
-          description: Width of the panel in the orientation selected by the optimizer.
+          description: Width of the panel (as given in the panel type).
         height:
           type: number
           format: double
-          description: Height of the panel in the orientation selected by the optimizer.
+          description: Height of the panel (as given in the panel type).
         trimming:
           type: number
           format: double
@@ -265,10 +303,39 @@ components:
             $ref: '#/components/schemas/Placement'
         unused_areas:
           type: array
-          description: Rectangular leftover areas on this panel after placements. Larger rectangles are preferred when free space must be split.
+          description: Disjoint offcuts of the cutting plan (each can be cut out with the listed cuts), largest first. Offcuts below 10 in either direction are omitted.
           items:
             $ref: '#/components/schemas/UnusedArea'
           default: []
+        cuts:
+          type: array
+          description: Guillotine saw cuts, ordered by stage within the cut tree. Trimming cuts are not listed.
+          items:
+            $ref: '#/components/schemas/Cut'
+          default: []
+    Cut:
+      type: object
+      required: [stage, direction, x, y, length]
+      properties:
+        stage:
+          type: integer
+          minimum: 1
+          description: 1 = cut through the whole trimmed panel, 2 = cut through a stage-1 strip, and so on.
+        direction:
+          type: string
+          enum: [vertical, horizontal]
+          description: vertical cuts run parallel to the y axis, horizontal cuts parallel to the x axis.
+        x:
+          type: number
+          format: double
+          description: Start of the cut; for vertical cuts the left edge of the kerf.
+        y:
+          type: number
+          format: double
+          description: Start of the cut; for horizontal cuts the lower edge of the kerf.
+        length:
+          type: number
+          format: double
     Placement:
       type: object
       required:
@@ -297,7 +364,7 @@ components:
           type: boolean
     UnusedArea:
       type: object
-      description: A rectangular leftover area on a panel after placements. When free space has more than 4 edges, the larger rectangular portion is preferred.
+      description: A rectangular offcut on a panel after placements.
       required:
         - x
         - y
@@ -348,7 +415,7 @@ components:
           type: number
           format: double
           nullable: true
-          description: Area of reusable remnants selected from non-overlapping unused rectangles.
+          description: Total area of offcuts whose area is at least min_reusable_remnant_size.
         actual_waste_area:
           type: number
           format: double
