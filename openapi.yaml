@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpenOptimizer API
-  version: 0.3.0
+  version: 0.3.1
   description: |
     REST interface for the OpenOptimizer cutting layout engine.
     The optimizer accepts a batch of rectangular parts, available panel types,
@@ -241,6 +241,10 @@ components:
         can_rotate:
           type: boolean
           description: Whether the item may be rotated by 90 degrees.
+        allow_min_trimming:
+          type: boolean
+          default: true
+          description: Panels holding this item may use the panel type's min_trimming. Set false on items that must not cause a smaller border.
     OptimizationResult:
       type: object
       required:

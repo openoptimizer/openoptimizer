@@ -232,6 +232,7 @@ mod tests {
             can_rotate,
             real_area: w * h,
             kind,
+            min_trimming_ok: true,
         }
     }
 

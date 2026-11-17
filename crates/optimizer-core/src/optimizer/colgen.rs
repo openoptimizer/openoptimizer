@@ -150,7 +150,7 @@ impl<'p, 'a> ColumnGeneration<'p, 'a> {
     }
 
     fn add_column(&mut self, spec: usize, placed: &[Placed]) -> bool {
-        if placed.is_empty() {
+        if placed.is_empty() || !self.problem.allows(&self.problem.specs[spec], placed) {
             return false;
         }
         let mut counts: Vec<(usize, u32)> = Vec::new();

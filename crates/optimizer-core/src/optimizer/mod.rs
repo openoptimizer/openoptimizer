@@ -105,13 +105,15 @@ impl Optimizer {
     /// Expands quantities into single pieces (ids `<id>_<n>` when quantity > 1).
     fn expand_pieces(&self) -> (Vec<Piece>, usize) {
         let kerf = self.kerf();
-        let mut kinds: HashMap<(i64, i64, bool), usize> = HashMap::new();
+        let mut kinds: HashMap<(i64, i64, bool, bool), usize> = HashMap::new();
         let mut pieces = Vec::new();
         for item in &self.request.items {
             let w = to_units(item.width) + kerf;
             let h = to_units(item.height) + kerf;
             let next = kinds.len();
-            let kind = *kinds.entry((w, h, item.can_rotate)).or_insert(next);
+            let kind = *kinds
+                .entry((w, h, item.can_rotate, item.allow_min_trimming))
+                .or_insert(next);
             for i in 0..item.quantity {
                 pieces.push(Piece {
                     id: if item.quantity > 1 {
@@ -124,6 +126,7 @@ impl Optimizer {
                     can_rotate: item.can_rotate,
                     real_area: to_units(item.width) * to_units(item.height),
                     kind,
+                    min_trimming_ok: item.allow_min_trimming,
                 });
             }
         }
@@ -185,7 +188,7 @@ impl Optimizer {
     /// Executes the full optimization flow and returns packed layouts.
     pub fn optimize(&self) -> Result<OptimizationResult> {
         let started = Instant::now();
-        let (pieces, kinds) = self.expand_pieces();
+        let (mut pieces, kinds) = self.expand_pieces();
         let specs = reindex(self.select_specs(self.bin_specs(), &pieces));
 
         for piece in &pieces {
@@ -201,6 +204,11 @@ impl Optimizer {
             .min(MAX_TIME_LIMIT_MS);
         let until = started + Duration::from_millis(time_limit);
         let normal = reindex(specs.iter().filter(|s| !s.reduced).cloned().collect());
+        for piece in &mut pieces {
+            // A part that only fits with the reduced border always allows it.
+            piece.min_trimming_ok |= !fits_any(piece, &normal);
+        }
+        let pieces = pieces;
         let solved = if normal.len() == specs.len() {
             self.solve(&pieces, kinds, &specs, started, until)
         } else {
@@ -227,10 +235,15 @@ impl Optimizer {
                     }
                 }
             }
+            // Reduced trimming only on panels holding a part that allows it.
+            let allowed = reduced.bins.iter().all(|b| {
+                !b.spec.reduced || b.placed.iter().any(|p| pieces[p.piece].min_trimming_ok)
+            });
             match plain {
                 Some(mut plain)
-                    if search::Score::of(&plain.bins).area
-                        <= search::Score::of(&reduced.bins).area + 1.0 =>
+                    if !allowed
+                        || search::Score::of(&plain.bins).area
+                            <= search::Score::of(&reduced.bins).area + 1.0 =>
                 {
                     plain.iterations += reduced.iterations;
                     plain.lower_bound_area = reduced.lower_bound_area;

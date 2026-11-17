@@ -36,6 +36,8 @@ pub struct Piece {
     pub real_area: i64,
     /// Group of identical pieces (same dimensions and rotation rule).
     pub kind: usize,
+    /// A panel holding this piece may use the reduced (minimum) trimming.
+    pub min_trimming_ok: bool,
 }
 
 impl Piece {

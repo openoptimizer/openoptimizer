@@ -127,6 +127,11 @@ impl<'a> Problem<'a> {
         })
     }
 
+    /// Reduced-trimming formats only for panels holding a part that allows them.
+    pub(super) fn allows(&self, spec: &BinSpec, placed: &[Placed]) -> bool {
+        !spec.reduced || placed.iter().any(|p| self.pieces[p.piece].min_trimming_ok)
+    }
+
     pub(super) fn deterministic_params(&self) -> PackParams {
         self.params_for(true, &mut Rng::new(1))
     }
@@ -167,6 +172,9 @@ impl<'a> Problem<'a> {
                 let mut rest = avail.clone();
                 let placed = packer.pack(spec, method, &mut rest);
                 if placed.is_empty() {
+                    continue;
+                }
+                if !self.allows(spec, &placed) {
                     continue;
                 }
                 let bin = PackedBin::new((*spec).clone(), placed, self.pieces);
