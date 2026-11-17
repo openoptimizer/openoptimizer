@@ -18,6 +18,7 @@ fn item(id: &str, width: f64, height: f64, quantity: u32, can_rotate: bool) -> I
         height,
         quantity,
         can_rotate,
+        allow_min_trimming: true,
     }
 }
 
@@ -474,4 +475,36 @@ fn remnants_can_keep_the_trimming_strip() {
     assert!(
         with_edge.summary.actual_waste_area.unwrap() < plain.summary.actual_waste_area.unwrap()
     );
+}
+
+#[test]
+fn reduced_trimming_only_on_panels_with_parts_that_allow_it() {
+    // Two 913 mm walls would also fit side by side with 11 mm (2 x 913 + 4 = 1830), but only the
+    // doors may use the smaller border.
+    let mut tight = panel("P", 1854.0, 4100.0, 15.0);
+    tight.min_trimming = Some(11.0);
+    let mut wall = item("wall", 913.0, 1900.0, 4, false);
+    wall.allow_min_trimming = false;
+    let req = request(
+        4.0,
+        vec![tight],
+        vec![item("door", 606.0, 1985.0, 6, false), wall],
+    );
+    let result = run(req.clone());
+    assert_valid(&req, &result);
+    let reduced: Vec<&PanelLayout> = result
+        .layouts
+        .iter()
+        .filter(|l| l.trimming == 11.0)
+        .collect();
+    assert!(!reduced.is_empty());
+    for layout in reduced {
+        assert!(
+            layout
+                .placements
+                .iter()
+                .any(|p| p.item_id.starts_with("door")),
+            "{layout:?}"
+        );
+    }
 }

@@ -55,6 +55,15 @@ pub struct Item {
     pub height: f64,
     pub quantity: u32,
     pub can_rotate: bool,
+    /// Panels holding this item may use the panel type's `min_trimming` (default true). Set it
+    /// to false for all items except those that need the smaller border (e.g. only the doors
+    /// that must fit three side by side); other panels then always keep the normal trimming.
+    #[serde(default = "default_true")]
+    pub allow_min_trimming: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Input: What user provides

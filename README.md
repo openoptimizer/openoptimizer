@@ -107,6 +107,10 @@ optimizer first plans with the normal `trimming`; only if the reduced border nee
 area, single panels are cut with `min_trimming`, and only those whose parts do not fit with the
 normal border. `PanelLayout.trimming` reports the border used for each panel.
 
+Set `allow_min_trimming: false` on the items that must not cause a smaller border (default
+`true`). Only panels holding at least one item that allows it may use `min_trimming`; for example
+mark only the 606 mm doors, and panels with walls only keep the normal trimming.
+
 ```yaml
 panel_types:
   - id: "hpl_large"
