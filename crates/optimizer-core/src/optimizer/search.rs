@@ -102,6 +102,31 @@ impl<'a> Problem<'a> {
         SearchOutcome { bins, iterations }
     }
 
+    /// Moves the pieces of `bin` to `spec` (same placement if it fits, otherwise re-packed).
+    pub(super) fn repack_on(&self, bin: &PackedBin, spec: &BinSpec) -> Option<PackedBin> {
+        let extent_w = bin.placed.iter().map(|p| p.x + p.w).max().unwrap_or(0);
+        let extent_h = bin.placed.iter().map(|p| p.y + p.h).max().unwrap_or(0);
+        if extent_w <= spec.w && extent_h <= spec.h {
+            return Some(PackedBin::new(
+                spec.clone(),
+                bin.placed.clone(),
+                self.pieces,
+            ));
+        }
+        let params = self.deterministic_params();
+        let packer = Packer {
+            pieces: self.pieces,
+            params: &params,
+        };
+        let avail = Avail::new(self.pieces, self.kinds, bin.placed.iter().map(|p| p.piece));
+        METHODS.into_iter().find_map(|method| {
+            let mut rest = avail.clone();
+            let placed = packer.pack(spec, method, &mut rest);
+            rest.is_empty()
+                .then(|| PackedBin::new(spec.clone(), placed, self.pieces))
+        })
+    }
+
     pub(super) fn deterministic_params(&self) -> PackParams {
         self.params_for(true, &mut Rng::new(1))
     }

@@ -101,6 +101,34 @@ panel_types:
 
 Omit the field (or set it to 0) to use the full panel.
 
+`min_trimming` allows a smaller border where it saves material, e.g. so that three 606 mm doors
+fit side by side on a 1854 mm panel with a 4 mm kerf (3 x 606 + 2 x 4 = 1826 > 1854 - 2 x 15). The
+optimizer first plans with the normal `trimming`; only if the reduced border needs less panel
+area, single panels are cut with `min_trimming`, and only those whose parts do not fit with the
+normal border. `PanelLayout.trimming` reports the border used for each panel.
+
+```yaml
+panel_types:
+  - id: "hpl_large"
+    width: 1854.0
+    height: 4100.0
+    trimming: 15.0
+    min_trimming: 11.0
+```
+
+### Panel selection
+
+`panel_selection` controls which panel types are used:
+
+| value | behaviour |
+| --- | --- |
+| `automatic` (default) | all panel types are mixed so that the least panel area is used |
+| `largest` | only the largest panel type; the others only if a part does not fit it |
+| `first` | only the first listed panel type; the others only if a part does not fit it |
+
+Use `largest`/`first` when smaller formats should only be cut if they are chosen explicitly
+(send only that format, or switch back to `automatic`).
+
 Layouts keep the panel orientation of the `panel_type`; cuts are planned in both directions.
 Items with `can_rotate: false` therefore always keep their orientation relative to the panel
 (grain direction).
@@ -135,6 +163,10 @@ equals the bound is provably optimal) and the `strategy` that produced the plan 
 Each `PanelLayout` in the response includes an `unused_areas` array containing the offcuts of the
 cutting plan, largest first. They do not overlap and each can be cut out with the listed cuts.
 Offcuts smaller than 10 in either direction are omitted.
+
+With `remnants_include_trimming: true`, offcuts at the panel border keep the trimming strip: they
+reach to the panel edge and count with that size against `min_reusable_remnant_size` and in
+`reusable_remnant_area`, because the factory edge stays on the stored remnant.
 
 Example response snippet:
 

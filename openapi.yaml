@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: OpenOptimizer API
-  version: 0.2.0
+  version: 0.3.0
   description: |
     REST interface for the OpenOptimizer cutting layout engine.
     The optimizer accepts a batch of rectangular parts, available panel types,
@@ -136,6 +136,17 @@ components:
           type: boolean
           description: Accepted for compatibility. Waste is always concentrated on as few panels as possible, the fullest panels come first.
           default: false
+        panel_selection:
+          type: string
+          enum: [automatic, largest, first]
+          default: automatic
+          description: |
+            automatic mixes all panel types for the least panel area. largest/first use only the
+            largest/first listed panel type; the others only if a part does not fit it.
+        remnants_include_trimming:
+          type: boolean
+          default: false
+          description: Unused areas at the panel border reach to the panel edge (the trimming strip stays on the remnant) and count with that size as reusable remnants.
         time_limit_ms:
           type: integer
           minimum: 0
@@ -172,6 +183,14 @@ components:
           format: double
           description: Uniform border (in panel units) trimmed from every edge before placing items.
           default: 0
+        min_trimming:
+          type: number
+          format: double
+          nullable: true
+          description: |
+            Smallest allowed border (0 <= min_trimming <= trimming). Used only if it saves material
+            and only on panels whose parts do not fit with the normal trimming. PanelLayout.trimming
+            reports the border of each panel.
     OptionalItem:
       type: object
       description: |
@@ -299,7 +318,7 @@ components:
         trimming:
           type: number
           format: double
-          description: Uniform border removed from this panel type during optimization.
+          description: Border removed from this panel (trimming, or min_trimming where that was needed).
           default: 0
         placements:
           type: array

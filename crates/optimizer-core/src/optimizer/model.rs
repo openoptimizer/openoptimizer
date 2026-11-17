@@ -71,7 +71,13 @@ impl Piece {
 /// Usable panel description in internal units.
 #[derive(Debug, Clone)]
 pub struct BinSpec {
+    /// Position in the list of formats handed to the search.
+    pub index: usize,
     pub type_index: usize,
+    /// Trimming of this format in mm.
+    pub trimming: f64,
+    /// Format with the reduced (minimum) trimming of its panel type.
+    pub reduced: bool,
     /// Inflated usable width/height (usable + kerf).
     pub w: i64,
     pub h: i64,

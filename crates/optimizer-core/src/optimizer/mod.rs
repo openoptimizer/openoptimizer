@@ -61,6 +61,14 @@ impl Optimizer {
                     panel.id
                 )));
             }
+            if let Some(min) = panel.min_trimming {
+                if !min.is_finite() || min < 0.0 || min > panel.trimming {
+                    return Err(OptimizerError::InvalidInput(format!(
+                        "Panel '{}' needs 0 <= min_trimming <= trimming",
+                        panel.id
+                    )));
+                }
+            }
             let usable_width = panel.width - (panel.trimming * 2.0);
             let usable_height = panel.height - (panel.trimming * 2.0);
             if !(usable_width > 0.0 && usable_height > 0.0) {
@@ -122,32 +130,66 @@ impl Optimizer {
         (pieces, kinds.len())
     }
 
+    /// Formats per panel type: the normal trimming and, if allowed, the reduced trimming.
     fn bin_specs(&self) -> Vec<BinSpec> {
         let kerf = self.kerf();
-        self.request
-            .panel_types
+        let mut specs = Vec::new();
+        for (i, p) in self.request.panel_types.iter().enumerate() {
+            let mut trims = vec![(p.trimming, false)];
+            if let Some(min) = p.min_trimming.filter(|m| *m < p.trimming) {
+                trims.push((min, true));
+            }
+            for (trimming, reduced) in trims {
+                specs.push(BinSpec {
+                    index: 0,
+                    type_index: i,
+                    trimming,
+                    reduced,
+                    w: to_units(p.width - 2.0 * trimming) + kerf,
+                    h: to_units(p.height - 2.0 * trimming) + kerf,
+                    panel_area: p.width * p.height,
+                });
+            }
+        }
+        specs
+    }
+
+    /// Applies `panel_selection`: only the preferred panel type, unless a part does not fit it.
+    fn select_specs(&self, specs: Vec<BinSpec>, pieces: &[Piece]) -> Vec<BinSpec> {
+        let panels = &self.request.panel_types;
+        let preferred = match self.request.panel_selection {
+            PanelSelection::Automatic => return specs,
+            PanelSelection::First => 0,
+            PanelSelection::Largest => (0..panels.len())
+                .max_by(|&a, &b| {
+                    let area = |i: usize| panels[i].width * panels[i].height;
+                    area(a)
+                        .partial_cmp(&area(b))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                        .then(b.cmp(&a))
+                })
+                .unwrap_or(0),
+        };
+        let chosen: Vec<BinSpec> = specs
             .iter()
-            .enumerate()
-            .map(|(i, p)| BinSpec {
-                type_index: i,
-                w: to_units(p.width - 2.0 * p.trimming) + kerf,
-                h: to_units(p.height - 2.0 * p.trimming) + kerf,
-                panel_area: p.width * p.height,
-            })
-            .collect()
+            .filter(|s| s.type_index == preferred)
+            .cloned()
+            .collect();
+        if pieces.iter().all(|p| fits_any(p, &chosen)) {
+            chosen
+        } else {
+            specs
+        }
     }
 
     /// Executes the full optimization flow and returns packed layouts.
     pub fn optimize(&self) -> Result<OptimizationResult> {
         let started = Instant::now();
         let (pieces, kinds) = self.expand_pieces();
-        let specs = self.bin_specs();
+        let specs = reindex(self.select_specs(self.bin_specs(), &pieces));
 
         for piece in &pieces {
-            let fits = specs
-                .iter()
-                .any(|s| piece.orientations(false).any(|o| o.w <= s.w && o.h <= s.h));
-            if !fits {
+            if !fits_any(piece, &specs) {
                 return Err(OptimizerError::ItemDoesNotFit(piece.id.clone()));
             }
         }
@@ -157,11 +199,109 @@ impl Optimizer {
             .time_limit_ms
             .unwrap_or(DEFAULT_TIME_LIMIT_MS)
             .min(MAX_TIME_LIMIT_MS);
-        let limit = Duration::from_millis(time_limit);
+        let until = started + Duration::from_millis(time_limit);
+        let normal = reindex(specs.iter().filter(|s| !s.reduced).cloned().collect());
+        let solved = if normal.len() == specs.len() {
+            self.solve(&pieces, kinds, &specs, started, until)
+        } else {
+            // Reduced trimming is only used when it saves material: first plan with the normal
+            // trimming, then with the reduced one allowed.
+            let half = started + Duration::from_millis(time_limit / 2);
+            let plain = pieces
+                .iter()
+                .all(|p| fits_any(p, &normal))
+                .then(|| self.solve(&pieces, kinds, &normal, started, half));
+            let mut reduced = self.solve(&pieces, kinds, &specs, Instant::now(), until);
+            let problem = search::Problem {
+                pieces: &pieces,
+                kinds,
+                specs: &specs,
+            };
+            for bin in &mut reduced.bins {
+                if bin.spec.reduced {
+                    if let Some(spec) = normal.iter().find(|s| s.type_index == bin.spec.type_index)
+                    {
+                        if let Some(repacked) = problem.repack_on(bin, spec) {
+                            *bin = repacked;
+                        }
+                    }
+                }
+            }
+            match plain {
+                Some(mut plain)
+                    if search::Score::of(&plain.bins).area
+                        <= search::Score::of(&reduced.bins).area + 1.0 =>
+                {
+                    plain.iterations += reduced.iterations;
+                    plain.lower_bound_area = reduced.lower_bound_area;
+                    plain
+                }
+                Some(plain) => {
+                    reduced.iterations += plain.iterations;
+                    reduced
+                }
+                None => reduced,
+            }
+        };
+        let lower_bound_area = solved.lower_bound_area;
+        let strategy = solved.strategy;
+        let outcome = search::SearchOutcome {
+            bins: solved.bins,
+            iterations: solved.iterations,
+        };
+
+        if outcome.bins.iter().map(|b| b.placed.len()).sum::<usize>() != pieces.len() {
+            return Err(OptimizerError::CannotFitAll);
+        }
+
+        let mut extra: Vec<Vec<optional::OptionalPlacement>> = vec![Vec::new(); outcome.bins.len()];
+        let mut built = self.to_layouts(&outcome.bins, &pieces, &extra);
+        let summary = self.calculate_summary(&built.layouts);
+        let effective_waste = summary
+            .actual_waste_percentage
+            .unwrap_or(summary.waste_percentage);
+        if effective_waste > optional::MIN_WASTE_THRESHOLD_PERCENT {
+            extra = self.place_optional_items(&outcome.bins);
+            if extra.iter().any(|e| !e.is_empty()) {
+                built = self.to_layouts(&outcome.bins, &pieces, &extra);
+            }
+        }
+        let optional_items_used = extra.iter().flatten().map(|p| p.id.clone()).collect();
+
+        let panels_required = self.count_panels(&built.layouts);
+        let summary = self.calculate_summary(&built.layouts);
+
+        Ok(OptimizationResult {
+            panels_required,
+            layouts: built.layouts,
+            summary,
+            optional_items_used,
+            statistics: Some(Statistics {
+                algorithm: ALGORITHM.to_string(),
+                iterations: outcome.iterations as u32,
+                elapsed_ms: started.elapsed().as_millis() as u64,
+                guillotine: built.guillotine,
+                max_stage: built.max_stage,
+                lower_bound_area,
+                strategy: strategy.to_string(),
+            }),
+        })
+    }
+
+    /// Search, root column generation and LP neighbourhood search on one set of formats.
+    fn solve(
+        &self,
+        pieces: &[Piece],
+        kinds: usize,
+        specs: &[BinSpec],
+        started: Instant,
+        until: Instant,
+    ) -> Solved {
+        let limit = until.saturating_duration_since(started);
         let problem = search::Problem {
-            pieces: &pieces,
+            pieces,
             kinds,
-            specs: &specs,
+            specs,
         };
 
         // 1. Multi-start construction and improvement search. Large requests keep most of the
@@ -172,7 +312,7 @@ impl Optimizer {
             0.4
         };
         let simple_bound =
-            bounds::round_up_to_panels(bounds::lower_bound_area(&pieces, &specs), &specs);
+            bounds::round_up_to_panels(bounds::lower_bound_area(pieces, specs), specs);
         let outcome = problem.search(&search::SearchOptions {
             max_iterations: MAX_ITERATIONS,
             deadline: started + limit.mul_f64(search_share),
@@ -190,16 +330,16 @@ impl Optimizer {
             simple_bound
         } else {
             let lp_bound = columns.root(started + limit.mul_f64(search_share + 0.15), |bound| {
-                bounds::round_up_to_panels(bound, &specs) >= incumbent - 1.0
+                bounds::round_up_to_panels(bound, specs) >= incumbent - 1.0
             });
-            bounds::round_up_to_panels(simple_bound.max(lp_bound), &specs)
+            bounds::round_up_to_panels(simple_bound.max(lp_bound), specs)
         };
 
         // 3. Large neighbourhood search through the pattern LP: a full dive first, then a few
         //    weak panels at a time are dissolved and their pieces re-packed by diving.
         if search::Score::of(&bins).area > lower_bound_area + 1.0 {
             columns.add_bins(&bins);
-            let deadline = started + limit;
+            let deadline = until;
             let params = problem.deterministic_params();
             let mut rng = Rng::new(97);
             for step in 0..MAX_LNS_STEPS {
@@ -252,43 +392,12 @@ impl Optimizer {
                 }
             }
         }
-        let outcome = search::SearchOutcome { bins, iterations };
-        if outcome.bins.iter().map(|b| b.placed.len()).sum::<usize>() != pieces.len() {
-            return Err(OptimizerError::CannotFitAll);
+        Solved {
+            bins,
+            iterations,
+            strategy,
+            lower_bound_area,
         }
-
-        let mut extra: Vec<Vec<optional::OptionalPlacement>> = vec![Vec::new(); outcome.bins.len()];
-        let mut built = self.to_layouts(&outcome.bins, &pieces, &extra);
-        let summary = self.calculate_summary(&built.layouts);
-        let effective_waste = summary
-            .actual_waste_percentage
-            .unwrap_or(summary.waste_percentage);
-        if effective_waste > optional::MIN_WASTE_THRESHOLD_PERCENT {
-            extra = self.place_optional_items(&outcome.bins);
-            if extra.iter().any(|e| !e.is_empty()) {
-                built = self.to_layouts(&outcome.bins, &pieces, &extra);
-            }
-        }
-        let optional_items_used = extra.iter().flatten().map(|p| p.id.clone()).collect();
-
-        let panels_required = self.count_panels(&built.layouts);
-        let summary = self.calculate_summary(&built.layouts);
-
-        Ok(OptimizationResult {
-            panels_required,
-            layouts: built.layouts,
-            summary,
-            optional_items_used,
-            statistics: Some(Statistics {
-                algorithm: ALGORITHM.to_string(),
-                iterations: outcome.iterations as u32,
-                elapsed_ms: started.elapsed().as_millis() as u64,
-                guillotine: built.guillotine,
-                max_stage: built.max_stage,
-                lower_bound_area,
-                strategy: strategy.to_string(),
-            }),
-        })
     }
 
     /// Converts internal bins into output layouts including cuts and offcuts.
@@ -307,7 +416,7 @@ impl Optimizer {
             let panel = &self.request.panel_types[bin.spec.type_index];
             let number = numbers.entry(bin.spec.type_index).or_insert(0);
             *number += 1;
-            let t = panel.trimming;
+            let t = bin.spec.trimming;
             let mut placed = bin.placed.clone();
             let mut ids: Vec<String> = bin
                 .placed
@@ -339,16 +448,37 @@ impl Optimizer {
                 })
                 .collect();
             let min_side = to_units(10.0);
+            let edge = self.request.remnants_include_trimming;
             let mut unused_areas: Vec<UnusedArea> = decomposition
                 .free
                 .iter()
-                .filter(|r| r.w - kerf >= min_side && r.h - kerf >= min_side)
-                .map(|r| UnusedArea {
-                    x: t + to_mm(r.x),
-                    y: t + to_mm(r.y),
-                    width: to_mm(r.w - kerf),
-                    height: to_mm(r.h - kerf),
+                .map(|r| {
+                    let mut area = UnusedArea {
+                        x: t + to_mm(r.x),
+                        y: t + to_mm(r.y),
+                        width: to_mm(r.w - kerf),
+                        height: to_mm(r.h - kerf),
+                    };
+                    if edge {
+                        // Remnants at the border keep the trimming strip up to the panel edge.
+                        if r.x == 0 {
+                            area.x = 0.0;
+                            area.width += t;
+                        }
+                        if r.y == 0 {
+                            area.y = 0.0;
+                            area.height += t;
+                        }
+                        if r.x + r.w == bin.spec.w {
+                            area.width += t;
+                        }
+                        if r.y + r.h == bin.spec.h {
+                            area.height += t;
+                        }
+                    }
+                    area
                 })
+                .filter(|a| a.width >= to_mm(min_side) && a.height >= to_mm(min_side))
                 .collect();
             unused_areas.sort_by(|a, b| {
                 (b.width * b.height)
@@ -398,6 +528,27 @@ impl Optimizer {
             max_stage,
         }
     }
+}
+
+struct Solved {
+    bins: Vec<PackedBin>,
+    iterations: usize,
+    strategy: &'static str,
+    lower_bound_area: f64,
+}
+
+/// Numbers formats by their position in the list handed to the search.
+fn reindex(mut specs: Vec<BinSpec>) -> Vec<BinSpec> {
+    for (i, spec) in specs.iter_mut().enumerate() {
+        spec.index = i;
+    }
+    specs
+}
+
+fn fits_any(piece: &Piece, specs: &[BinSpec]) -> bool {
+    specs
+        .iter()
+        .any(|s| piece.orientations(false).any(|o| o.w <= s.w && o.h <= s.h))
 }
 
 struct BuiltLayouts {
