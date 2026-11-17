@@ -116,11 +116,11 @@ impl<'p, 'a> ColumnGeneration<'p, 'a> {
     }
 
     fn spec_of(&self, bin: &PackedBin) -> usize {
-        self.problem
-            .specs
-            .iter()
-            .position(|s| s.type_index == bin.spec.type_index)
-            .expect("bin uses a known format")
+        debug_assert_eq!(
+            self.problem.specs[bin.spec.index].type_index,
+            bin.spec.type_index
+        );
+        bin.spec.index
     }
 
     /// Pattern index of a panel (if it is in the pool).

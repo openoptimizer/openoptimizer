@@ -239,7 +239,10 @@ mod tests {
     fn counts_pieces_per_panel_exactly_for_strips() {
         // 4 pieces of width 25 fit across 100, a fifth does not; height allows only one row.
         let spec = BinSpec {
+            index: 0,
             type_index: 0,
+            trimming: 0.0,
+            reduced: false,
             w: 10_000,
             h: 10_000,
             panel_area: 1.0,
@@ -260,7 +263,10 @@ mod tests {
     fn uses_both_cut_directions() {
         // 2 x 2 grid of squares.
         let spec = BinSpec {
+            index: 0,
             type_index: 0,
+            trimming: 0.0,
+            reduced: false,
             w: 10_000,
             h: 10_000,
             panel_area: 1.0,

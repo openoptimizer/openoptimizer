@@ -23,10 +23,28 @@ pub struct PanelType {
     /// Uniform border trimmed from every edge before the panel is usable
     #[serde(default)]
     pub trimming: f64,
+    /// Smallest allowed trimming. When set below `trimming`, the optimizer may cut single
+    /// panels with this smaller border, but only if that saves material and only on the panels
+    /// whose parts do not fit with the normal trimming (e.g. three doors side by side).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_trimming: Option<f64>,
     /// Optional filler items that can be placed to reduce waste.
     /// Only considered when effective waste exceeds 8%; sorted by priority (descending).
     #[serde(default)]
     pub optional_items: Vec<OptionalItem>,
+}
+
+/// Which panel types the optimizer may use.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PanelSelection {
+    /// Mix all panel types so that the least panel area is used (default).
+    #[default]
+    Automatic,
+    /// Only the largest panel type (by area). The others are used only if a part does not fit it.
+    Largest,
+    /// Only the first listed panel type. The others are used only if a part does not fit it.
+    First,
 }
 
 /// Item to be cut
@@ -55,6 +73,13 @@ pub struct OptimizationRequest {
     /// Try to optimize for leaving large reusable remnants
     #[serde(default)]
     pub optimize_for_reusable_remnants: bool,
+    /// Which panel types may be used (default `automatic`: mix all types).
+    #[serde(default)]
+    pub panel_selection: PanelSelection,
+    /// Unused areas at the panel border keep the trimming strip: they reach to the panel edge
+    /// and count with that size as reusable remnants (the factory edge stays on the remnant).
+    #[serde(default)]
+    pub remnants_include_trimming: bool,
     /// Upper bound for the search time in milliseconds (default 3000, max 30000).
     /// The first solution is always computed completely; later improvement rounds stop here.
     #[serde(default, skip_serializing_if = "Option::is_none")]

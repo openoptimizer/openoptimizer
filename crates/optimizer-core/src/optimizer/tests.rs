@@ -6,6 +6,7 @@ fn panel(id: &str, width: f64, height: f64, trimming: f64) -> PanelType {
         width,
         height,
         trimming,
+        min_trimming: None,
         optional_items: vec![],
     }
 }
@@ -28,6 +29,8 @@ fn request(cut_width: f64, panel_types: Vec<PanelType>, items: Vec<Item>) -> Opt
         min_initial_usage: true,
         min_reusable_remnant_size: None,
         optimize_for_reusable_remnants: true,
+        panel_selection: PanelSelection::Automatic,
+        remnants_include_trimming: false,
         time_limit_ms: Some(2000),
     }
 }
@@ -386,4 +389,89 @@ fn reports_the_strategy_that_produced_the_plan() {
     let stats = result.statistics.unwrap();
     assert_eq!(stats.algorithm, ALGORITHM);
     assert!(["search", "column-generation"].contains(&stats.strategy.as_str()));
+}
+
+#[test]
+fn panel_selection_prefers_the_largest_or_first_panel_type() {
+    let panels = vec![
+        panel("small", 1854.0, 2800.0, 15.0),
+        panel("large", 1854.0, 4100.0, 15.0),
+    ];
+    let items = vec![item("part", 800.0, 1200.0, 2, true)];
+    let mut req = request(4.0, panels, items);
+    assert_eq!(run(req.clone()).layouts[0].panel_type_id, "small");
+    req.panel_selection = PanelSelection::Largest;
+    let result = run(req.clone());
+    assert_valid(&req, &result);
+    assert!(result.layouts.iter().all(|l| l.panel_type_id == "large"));
+    req.panel_selection = PanelSelection::First;
+    req.panel_types.reverse();
+    assert!(run(req).layouts.iter().all(|l| l.panel_type_id == "large"));
+}
+
+#[test]
+fn panel_selection_falls_back_when_a_part_does_not_fit_the_preferred_type() {
+    let panels = vec![
+        panel("short", 1854.0, 2800.0, 15.0),
+        panel("long", 1854.0, 4100.0, 15.0),
+    ];
+    let mut req = request(
+        4.0,
+        panels,
+        vec![item("long part", 600.0, 3500.0, 1, false)],
+    );
+    req.panel_selection = PanelSelection::First;
+    let result = run(req.clone());
+    assert_valid(&req, &result);
+    assert_eq!(result.layouts[0].panel_type_id, "long");
+}
+
+#[test]
+fn reduces_trimming_only_where_three_doors_need_it() {
+    // 3 x 606 + 2 x 4 = 1826 mm: does not fit 1854 - 2 x 15 = 1824, but 1854 - 2 x 11 = 1832.
+    let mut tight = panel("P", 1854.0, 4100.0, 15.0);
+    tight.min_trimming = Some(11.0);
+    let req = request(
+        4.0,
+        vec![tight.clone()],
+        vec![item("door", 606.0, 1985.0, 6, false)],
+    );
+    let result = run(req.clone());
+    assert_valid(&req, &result);
+    assert_eq!(result.summary.total_panels, 1);
+    assert_eq!(result.layouts[0].trimming, 11.0);
+
+    // Narrower doors fit with the normal trimming, which is kept.
+    let req = request(
+        4.0,
+        vec![tight],
+        vec![item("door", 600.0, 1985.0, 6, false)],
+    );
+    let result = run(req.clone());
+    assert_valid(&req, &result);
+    assert_eq!(result.summary.total_panels, 1);
+    assert_eq!(result.layouts[0].trimming, 15.0);
+}
+
+#[test]
+fn remnants_can_keep_the_trimming_strip() {
+    let items = vec![item("part", 1000.0, 1800.0, 1, false)];
+    let mut req = request(4.0, vec![panel("P", 1854.0, 4100.0, 15.0)], items);
+    req.min_reusable_remnant_size = Some(700.0 * 1854.0);
+    let plain = run(req.clone());
+    req.remnants_include_trimming = true;
+    let with_edge = run(req.clone());
+    assert_valid(&req, &with_edge);
+    let largest = &with_edge.layouts[0].unused_areas[0];
+    // The large remnant spans the full panel width including both trimming strips.
+    assert_eq!(largest.width, 1854.0);
+    assert_eq!(largest.x, 0.0);
+    assert_eq!(largest.y + largest.height, 4100.0);
+    assert!(
+        with_edge.summary.reusable_remnant_area.unwrap()
+            > plain.summary.reusable_remnant_area.unwrap()
+    );
+    assert!(
+        with_edge.summary.actual_waste_area.unwrap() < plain.summary.actual_waste_area.unwrap()
+    );
 }
